@@ -1,0 +1,37 @@
+---
+interface Props {
+  alt: string;
+  href: string;
+  src: string;
+  srcDark?: string;
+  class?: string;
+  caption?: string;
+}
+
+const { alt, href, src, srcDark, caption, class: className = "h-8" } = Astro.props;
+---
+
+<a
+  aria-label={alt}
+  class="inline-flex flex-col items-start gap-2 rounded-sm no-underline! outline-offset-8 transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+  href={href}
+  rel="noopener noreferrer"
+  target="_blank"
+>
+  <img
+    alt=""
+    class:list={[className, "w-auto", srcDark && "dark:hidden"]}
+    src={src}
+  />
+  {
+    srcDark && (
+      <img
+        alt=""
+        aria-hidden="true"
+        class:list={[className, "hidden w-auto dark:block"]}
+        src={srcDark}
+      />
+    )
+  }
+  {caption && <span class="text-muted-foreground text-xs">{caption}</span>}
+</a>

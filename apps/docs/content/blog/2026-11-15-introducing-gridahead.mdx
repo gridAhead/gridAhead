@@ -1,0 +1,47 @@
+---
+title: Introducing gridAhead
+type: blog
+date: 2026-11-15
+authors:
+  - name: Goal100
+    url: https://goal100.studio
+  - name: Reiner Lemoine Institut
+    url: https://reiner-lemoine-institut.de/
+description: Why grid expansion plans need to become data, and what gridAhead is setting out to do. Goal100 & Reiner Lemoine Institut join forces.
+---
+
+import Credits from "../../components/Credits.astro";
+import BlogMeta from "../../components/BlogMeta.astro";
+
+<BlogMeta />
+
+Grid expansion is one of the tightest bottlenecks in Germany's energy transition, and much depends on getting it right. 
+The plans that describe the next years of that expansion are already public, as required [by law](https://www.gesetze-im-internet.de/enwg_2005/__14d.html). 
+Unfortunately, in their current state they are not yet something a researcher, an investor, or a public agency can put on a map and reuse.
+
+To usher in more grid transparency in Germany, and to foster a more rapid & just renewable energy transition, [Goal100](https://goal100.studio) and the [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/) join forces
+to geocode and georeference the grid expansion plans of German distribution system operators. The goal is that these plans become data the public can work with, as originally intended by the law.
+
+## The plans are already published
+
+Larger distribution system operators have to publish a grid expansion plan every two years. The plans say where the network is expected to grow, which measures are foreseen, and on what timetable.
+
+That information is practical. It bears on private and public investment, on research, and on political discourse about where the energy transition can actually proceed. 
+The documents exist because the law requires them to.
+
+## They are not yet usable
+
+The publications by the grid operators do not follow a modern data standard. Places and measures are difficult to compare across operators, difficult to join to other spatial data, and difficult to hand to a model or a map. Anyone who wants to use a plan still has to read it by hand.
+
+Publishing a PDF is not the same as publishing data. Until the measures have coordinates and share one spatial reference system, the plans stay locked inside the files that carry them.
+
+## What gridAhead is building (for now)
+
+1. **Geocode planned expansions.** Bind the places and measures in the plans to coordinates.
+2. **Georeference medium voltage maps.** Create the most comprehensive public data of current and future medium voltage grids in Germany.
+3. **Make it accessible.** Publish the result so others can keep working with it, instead of starting from the original documents again.
+
+We will document the method and the results here as they settle. This site is the public record of that work, starting with the [Introduction](/docs).
+
+gridAhead is co-funded by [Google.org](https://www.google.org/) and the [Veolia Stiftung](https://www.stiftung.veolia.de/).
+<Credits />

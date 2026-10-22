@@ -1,0 +1,105 @@
+---
+import { getCollection } from "astro:content";
+import data from "blume:data";
+import { stripBase } from "blume/components/islands/base-path.ts";
+import { resolveDateFormatOptions } from "blume/core/date-format.ts";
+import { getBlumeCollection } from "blume/runtime";
+
+interface Author {
+  name: string;
+  url?: string;
+}
+
+type AuthorInput = string | Author;
+
+interface Props {
+  /** Overrides frontmatter `authors` when passed. A name, or a name with a URL. */
+  authors?: AuthorInput | AuthorInput[];
+}
+
+const { authors: authorsProp } = Astro.props;
+
+const normalizePath = (path: string): string =>
+  path.length > 1 ? path.replace(/\/$/, "") : path || "/";
+
+const pathname = normalizePath(
+  stripBase(import.meta.env.BASE_URL ?? "/", Astro.url.pathname)
+);
+
+const route = getBlumeCollection(data, { includeHidden: true }).find(
+  (item) => normalizePath(item.path) === pathname
+);
+
+const entry = route
+  ? (await getCollection("docs")).find((item) => item.id === route.entryId)
+  : undefined;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const toAuthors = (value: unknown): Author[] => {
+  if (value == null) {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  return list.flatMap((author) => {
+    if (typeof author === "string") {
+      const name = author.trim();
+      return name ? [{ name }] : [];
+    }
+    if (!isRecord(author) || typeof author.name !== "string") {
+      return [];
+    }
+    const name = author.name.trim();
+    if (!name) {
+      return [];
+    }
+    const url = typeof author.url === "string" ? author.url : undefined;
+    return [{ name, url }];
+  });
+};
+
+const authors = toAuthors(
+  authorsProp === undefined ? entry?.data.authors : authorsProp
+);
+
+const published = entry?.data.date;
+const publishedDate = published ? new Date(published) : undefined;
+const validDate =
+  publishedDate && !Number.isNaN(publishedDate.getTime())
+    ? publishedDate
+    : undefined;
+const locale = Astro.currentLocale ?? data.config.i18n?.defaultLocale ?? "en";
+const dateLabel = validDate
+  ? new Intl.DateTimeFormat(
+      locale,
+      resolveDateFormatOptions(data.config.dateFormat)
+    ).format(validDate)
+  : undefined;
+const dateTime = validDate?.toISOString().slice(0, 10);
+---
+
+{
+  (dateLabel || authors.length > 0) && (
+    <p class="not-prose mt-8 mb-0 flex flex-wrap items-baseline gap-x-2 text-muted-foreground text-sm">
+      {dateLabel && <time datetime={dateTime}>{dateLabel}</time>}
+      {authors.map((author, index) => (
+        <>
+          {(dateLabel || index > 0) && <span aria-hidden="true">·</span>}
+          {author.url ? (
+            <a
+              class="text-foreground no-underline! underline-offset-4 hover:underline!"
+              href={author.url}
+              rel={author.url.startsWith("http") ? "noopener noreferrer" : undefined}
+              target={author.url.startsWith("http") ? "_blank" : undefined}
+            >
+              {author.name}
+            </a>
+          ) : (
+            <span class="text-foreground">{author.name}</span>
+          )}
+        </>
+      ))}
+    </p>
+  )
+}
