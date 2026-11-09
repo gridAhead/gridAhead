@@ -1,0 +1,38 @@
+version = 1
+SPDX-PackageName = "nap_tool"
+SPDX-PackageDownloadLocation = "https://github.com/rl-institut/nap_tool"
+
+# Files that cannot carry an inline header (no comment syntax, generated, or vendored).
+
+[[annotations]]
+path = ["uv.lock", ".env.example"]
+SPDX-FileCopyrightText = [
+    "2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut",
+    "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
+]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+    ".python-version",
+    "src/nap_tool/ui/frontend/package.json",
+    "src/nap_tool/ui/frontend/package-lock.json",
+    "src/nap_tool/ui/frontend/tsconfig.json",
+    "src/nap_tool/ui/static/**",
+]
+SPDX-FileCopyrightText = "2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "tests/**/.gitkeep"
+SPDX-FileCopyrightText = "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut"
+SPDX-License-Identifier = "Apache-2.0"
+
+# Vendored / bundled PDF.js (Mozilla). Listed last so it overrides static/** above.
+[[annotations]]
+path = [
+    "src/nap_tool/ui/frontend/src/vendor/pdfjs/**",
+    "src/nap_tool/ui/static/assets/pdf.worker.min-*.mjs",
+]
+SPDX-FileCopyrightText = "2024 Mozilla Foundation"
+SPDX-License-Identifier = "Apache-2.0"

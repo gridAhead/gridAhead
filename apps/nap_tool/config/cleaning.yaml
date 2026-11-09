@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut
+#
+# SPDX-License-Identifier: Apache-2.0
+
+units:
+  money:
+    canonical: "€"
+    aliases: {"€": 1, "T€": 1000, "Tsd. €": 1000, "Mio. €": 1000000, "Mio €": 1000000, "Mio.": 1000000}
+  length:
+    canonical: "km"
+    aliases: {"km": 1, "m": 0.001}
+  apparent_power:
+    canonical: "MVA"
+    aliases: {"MVA": 1, "kVA": 0.001}
+  active_power:
+    canonical: "MW"
+    aliases: {"MW": 1, "kW": 0.001}
+  count:
+    canonical: "Stück"
+    aliases: {"Stück": 1, "St": 1, "Stk.": 1}
+null_tokens:
+  - "-"
+  - "---"
+  - "_"
+  - "nicht zutreffend"
+  - "Geschwärzt"
+  - "Bitte auswählen!"
+  - "keine Angabe"
+  - "keine Angabe möglich"
+  - "Noch nicht bekannt"
+  - "in Bearbeitung"
+  - "noch in Klärung"

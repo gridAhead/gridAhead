@@ -1,0 +1,202 @@
+# SPDX-FileCopyrightText: 2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut
+#
+# SPDX-License-Identifier: Apache-2.0
+
+round:
+  year: 2024
+  start: '2023-07'
+  end: '2025-06'
+# The harmonized table carries only values that stand in a source cell, so a field no
+# column feeds cannot be required of it: capacity_change_basis, amount_kind and
+# time_window_kind are derived values, and scheme v3 folds substation_capacity_change_mva
+# into capacity_change_mva (station capacity falls back to it). Overview rows are
+# recognised from the aggregate_* columns instead; see record_type.overview_conditions.
+required_fields: [dso_slug, measure_no, measure_name, measure_description, project_category, asset_type, grid_level, project_status, permit_status, primary_driver, existing_bottleneck, forecast_bottleneck, capacity_change_mva, reported_amount_eur, line_length_km, source_cells_json]
+fields:
+  numeric: [capacity_change_mva, capacity_change_mw, substation_capacity_change_mva, reported_amount_eur, line_length_km, asset_count, capacity_total_mva, nominal_capacity_kva, installed_transformer_capacity_kva, current_power_kw, scenario_power_kw, overload_percent, generation_share_percent, consumption_share_percent]
+  date: [planned_start, planned_end, commissioning_date, start_date, end_date, optimal_completion, planned_commissioning, planned_construction_end, planned_completion, required_by, demand_year, execution_year, time_window_start, time_window_end]
+  text: [asset_type, measure_name, measure_description, existing_asset_spec, planned_asset_spec]
+vocabularies:
+  project_category:
+    new: [Neubau]
+    replacement_increase: ['Ersatz(neubau) mit Erhöhung der Übertragungskapazität', Ersatzneubau mit Erhöhung der Übertragungskapazität, ENB mit Erh. ÜK, Erneuerung mit Leistungserhöhung, Ersatz mit Erhöhung der Übertragungskapazität]
+    replacement_no_increase: ['Ersatz(neubau) ohne Erhöhung der Übertragungskapazität', Ersatzneubau ohne Erhöhung der Übertragungskapazität, Ersatz ohne Erhöhung der Übertragungskapazität]
+    replacement: [Ersatzneubau]
+    optimization: [Netzoptimierung und -verstärkung, Netzoptimierung u. -verstärkung, Netzoptimierung und Verstärkung]
+    dismantling: [Rückbau / Altlastentsorgung, Rückbau / Altlastenentsorgung, Rückbau]
+  project_status:
+    planned: [vorgesehene Maßnahme, vorgesehene Maßnahmen, 'vorgesehene Maßnahme(n)']
+    planning: [konkrete Planung, Vorplanung, Maßnahme in Planung]
+    under_construction: [im Bau, in Bau]
+    completed: [abgeschlossen]
+    dropped: [weggefallene Maßnahme, Maßnahme verworfen]
+    calculated_need: [rechnerische Bedarfsermittlung, ermittelter Bedarf, Rechnerische Bedarfs- ermittlung]
+  permit_status:
+    not_started: [noch nicht eingeleitet]
+    in_progress: [bereits eingeleitet]
+    completed: [abgeschlossen]
+    not_required: [keine Genehmigung erforderlich]
+    various: ['unterschiedlicher Stand, da Sammler']
+  grid_level:
+    EHV: [HöS, Höchstspannung, '1']
+    EHV/HV: [HöS/HS, '2']
+    HV: [HS, HSP, Hochspannung, '3']
+    HV/MV: [UW HS auf MS, HS/MS, Umspannung Hoch- auf Mittelspannung, '4']
+    MV: [MS, MSP, Mittelspannung, '5']
+    MV/LV: [UW MS auf NS, MS/NS, Umspannung Mittel- auf Niederspannung, '6']
+    LV: [NS, NSP, Niederspannung, '7']
+    all: [Gesamtnetz, Sonstige, Gesamtnetz / Sonstige]
+  primary_driver:
+    generation_and_load: [Zubau Erzeugung und Verbrauch]
+    load: [Zubau Verbraucher, Zubau Verbrauch]
+    generation_renewable: [Zubau EE-Anlagen]
+    generation_other: [Zubau anderer Erzeugungsanlagen]
+    power_to_x: [Zubau Power to X]
+    no_expansion: ['Kein Zubau (reiner Ersatz, n-1 Sicherheit, sonstiges)', Kein Zubau (reiner Ersatz)]
+  existing_bottleneck: &bottlenecks
+    none: [nein]
+    generation: ['ja, um einen erzeugungsbedingten Engpass zu beheben', 'ja, um einen erzeugungsbedingten Engpass vorzubeugen', 'ja, um einem erzeugungsbedingten Engpass vorzubeugen']
+    load: ['ja, um einen verbrauchsbedingten Engpass zu beheben', 'ja, um einen verbrauchsbedingten Engpass vorzubeugen', 'ja, um einem verbrauchsbedingten Engpass vorzubeugen']
+    both: ['ja, beides (verbrauchsbedingt und erzeugungsbedingt)']
+    yes_unspecified: [ja]
+  forecast_bottleneck: *bottlenecks
+record_type:
+  name_field: measure_name
+  collective_fields: [measure_name, measure_description, project_category, permit_status]
+  overview_conditions:
+    - nonempty_field_pattern: '^aggregate_'
+    - nonempty_field_pattern: '^investment_.*_eur$'
+      empty_fields: [measure_name, measure_description]
+  overview: [Summe, Gesamt, Gesamt Investitionsvolumen]
+  # Regular expressions on the case-folded text of collective_fields.
+  collective: ['sammler', 'sammelposition', 'aggregiert', 'pauschal', 'diverse', 'kleinstmassnahm', 'kleinmassnahm', 'noch nicht (?:konkret|benannt)', '\bn\.\s?n\.', 'massnahmenregion', 'versch\.', 'verschiedene', '\bje\s+teilnetz', 'einzelmassnahmen', 'unterschiedlicher stand']
+  reference_patterns: ['^\s*(?:ersetzt|zusammengeführt|siehe|entfällt|entfallen|gestrichen|verschoben|integriert)\b']
+  identity_fields: [measure_no, measure_name, measure_description]
+  metadata_fields: [dso_slug, nap_year, document_key, extractor, table_number, row_number, source_cells_json]
+  min_filled_fields: 2
+measure_type:
+  priority: [dismantling, new, replacement, optimization]
+  dismantling: ['\b(rückbau|demontage|abbau)\b']
+  new: ['\b(neubau|nb|errichtung|zubau|neue|neuer|neues)\b']
+  replacement: ['ersatz', '\benb\b', 'erneuerung', 'austausch', 'tausch', 'sanierung']
+  optimization: ['verstärkung', 'optimierung', 'ertüchtigung', '\bflm\b', 'freileitungsmonitoring', '80\s*°c', 'seilauswechslung', 'umbeseilung']
+assets:
+  substation:
+    object_patterns: ['\b(?:neubau|errichtung|zubau|neue[rs]?)\s+(?:eines?\s+)?(?:uw|umspannwerk|umspannanlage|knoten|station)\b', '\b(?:in das|in den|ins|im|in die)\s+(?:\w+\s+)?(?:uw|ua|umspannwerk|umspannanlage|station)\b']
+    location_patterns: ['\b(?:uw|ua|us|kus|umspannwerk|umspannanlage|umspannstation|unterstation|knoten)\s*[: ]\s*\S', '\S+\s+uw\b', '\buw\s*-']
+    asset_class: station
+    patterns: ['\b(uw\d*|umspannwerk|umspannanlage|umspannstation|umspannpunkt|ua|us|kus|unterstation|knoten|schwerpunktstation(?:en)?|station(?:en)?)\b']
+  local_substation:
+    object_patterns: ['\b(?:neubau|errichtung|zubau|neue[rs]?)\s+(?:eines?\s+|einer\s+)?(?:ons|ortsnetzstation(?:en)?|netzstation(?:en)?|trafostation(?:en)?)\b']
+    location_patterns: ['\b(?:ons|st|stl|sta)\.?\s+\S']
+    asset_class: station
+    patterns: ['\b(ons|on-station|ortsnetzstation(?:en)?|netzstation(?:en)?|trafostation(?:en)?|transformatorenstation(?:en)?|kompaktstation(?:en)?|stl)\b', '\bst\b(?!\.)']
+  switching_station:
+    object_patterns: ['\b(?:neubau|errichtung|zubau|neue[rs]?)\s+(?:eines?\s+)?(?:sst|schaltstation|schaltwerk)\b']
+    location_patterns: ['\bsst\s+\S']
+    asset_class: station
+    patterns: ['\b(sst|schaltstation|schaltwerk|schalthaus)\b']
+  overhead_line:
+    asset_class: line
+    patterns: ['freileitung', '\bfrltg\b', 'beseilung', '\bflm\b', 'freileitungsmonitoring', '80\s*-?\s*°\s*-?\s*c', 'trassierung', 'hochtemperatur', '\bhsl\b', 'doppelleitung', '\b\d+-syst']
+  cable:
+    asset_class: line
+    # Cable designations such as NKBA, NA2XS(F)2Y, NAYY, N2XSY, NAYCWY.
+    patterns: ['kabel(?!verteil)', 'verkabelung', '\bkbl\b', 'leerrohr', '\b(msk|nsk|vpe)\b', '\bn2xs', '\bn[a2]?[a-z0-9()]*(?:kba|yy|xs|cwy)\b']
+  line_or_cable:
+    suppress_if_types: [overhead_line, cable, line_component]
+    asset_class: line
+    patterns: ['leitung(?!stechnik)', '\bltg\b', '(?<!s)trass', '\b(stromkreis|strecke|stützleitung)\b', 'anbindung', 'verbindung', 'einschleifung', '\bbl\.\s*\d', '\bstrang']
+  transformer:
+    asset_class: station
+    patterns: ['trafo(?!station)', 'transformator(?!enstation)', 'umspanner', 'kuppl']
+  switchgear:
+    asset_class: station
+    patterns: ['schaltanlage', 'leistungsschalter', 'schaltzelle', '\b(sa|msa|schaltfeld|feld|felder|sammelschiene|ls)\b']
+  reactive_power_compensation:
+    asset_class: station
+    patterns: ['blindleistung', '\b(drossel|statcom|kondensatoranlage)\b']
+  earth_fault_compensation:
+    exclude_patterns: ['blindleistung']
+    asset_class: station
+    patterns: ['petersen', 'e-spule', 'erdschlusslöschspule', 'kompensationsspule', 'löschspule']
+  voltage_regulator:
+    asset_class: station
+    patterns: ['spannungsregler', 'längsregler', '\bront\b', 'regelbarer ortsnetztransformator']
+  line_component:
+    asset_class: line
+    patterns: ['\b(mast|masten|seil|leiterseil|leitungsportal)\b', 'seilauswechslung', 'umbeseilung']
+  secondary_tech:
+    asset_class: other
+    patterns: ['schutz- und leittechnik', 'schutztechnik', 'leittechnik', 'sekundärtechnik', 'fernwirk', '\bfwa\b', 'messtechnik', '\blwl\b', 'glasfaser', 'stromversorgungsanlagen', 'eigenbedarf']
+  grid_connection:
+    asset_class: other
+    patterns: ['netzanschl', 'kundenanschl', 'hausanschl']
+  network:
+    fallback_only: true
+    asset_class: other
+    patterns: ['netzverstärkung', 'netzausbau', 'netzerweiterung', 'umstrukturierung', 'restrukturierung', 'netzoptimierung', 'netzentflechtung', 'erschliessung', 'netzentwicklung']
+  other:
+    asset_class: other
+    patterns: []
+asset_priority: [substation, switching_station, local_substation, overhead_line, cable, line_or_cable, transformer, switchgear, reactive_power_compensation, earth_fault_compensation, voltage_regulator, line_component, secondary_tech, grid_connection, network, other]
+# Column "Betriebsmittel [Zuordnungscodes]" (NAP 2026). Codes are separated by
+# ". ", "," or "/" or not at all ("501601"); Excel may store "201.401" as 201401.
+asset_codes:
+  code_pattern: '[2-8]0\d'
+  separator_pattern: '[\s.,;/+&|\-]+|\bund\b'
+  codes:
+    '201': {asset_type: substation, grid_level: EHV/HV}
+    '301': {asset_type: line_or_cable, grid_level: HV}
+    '302': {asset_type: line_component, grid_level: HV}
+    '401': {asset_type: substation, grid_level: HV/MV}
+    '501': {asset_type: line_or_cable, grid_level: MV}
+    '601': {asset_type: local_substation, grid_level: MV/LV}
+    '701': {asset_type: line_or_cable, grid_level: LV}
+    '801': {asset_type: secondary_tech}
+    '802': {asset_type: reactive_power_compensation}
+  line_construction:
+    overhead_line: [Freileitung]
+    cable: [Erdkabel, Kabel, HS-Kabel]
+voltage:
+  allowed_kv: [0.4, 6, 10, 11, 15, 20, 25, 30, 35, 60, 66, 110, 220, 380]
+  insulation: {'1': 0.4, '12': 10, '24': 20, '36': 30, '123': 110}
+  ranges: {EHV: [220, 1000], HV: [50, 150], MV: [1.001, 49.999], LV: [0, 1]}
+  inference: {LV: 400, HV: 110000}
+  level_order: [EHV, EHV/HV, HV, HV/MV, MV, MV/LV, LV]
+  level_tokens:
+    EHV/HV: ['\bhös\s*(?:[/-]|\bauf\b)\s*hs\b', 'kuppelumspanner']
+    HV/MV: ['\bhs\s*(?:[/-]|\bauf\b)\s*ms\b']
+    MV/LV: ['\bms\s*(?:[/-]|\bauf\b)\s*ns\b', '\b(ons|on-station|ortsnetzstation(?:en)?|netzstation(?:en)?|trafostation(?:en)?|ortsnetztrafo|ortsnetztransformator|ront)\b']
+    EHV: ['\bhös\b', 'höchstspannung']
+    HV: ['\b(hs|hsp|hsl|hochspannung|flm)\b', 'freileitungsmonitoring', '80\s*-?\s*°\s*-?\s*c', '\b\d-syst']
+    MV: ['\b(ms|msp|mittelspannung)\b']
+    LV: ['\b(ns|nsp|niederspannung|kvs)\b', 'hausanschl', 'kabelverteil']
+  station_level_tokens:
+    HV/MV: ['\b(uw\d*|umspannwerk|umspannanlage|ua)\b']
+    MV: ['\b(sst|schaltstation|schwerpunktstation|schalthaus)\b']
+locations:
+  strip_patterns: ['^\s*\d{2}_[^,]*,\s*', '\blfd[_ ]?\w*?[_ ]?nr\.?\s*\d*']
+  # Station keyword before a name -> location kind (case-insensitive regexes).
+  types:
+    substation: ['uw\d*', 'ua', 'us', 'kus', 'umspannwerk', 'umspannanlage', 'umspannstation', 'unterstation', 'knoten', 'schwerpunktstation', 'anlage']
+    switching_station: ['sst', 'sa', 'schaltanlage', 'schaltstation', 'schalthaus', 'schaltwerk']
+    local_substation: ['ons', 'on-station', 'st', 'stl', 'station', 'netzstation', 'ortsnetzstation', 'trafostation']
+    search_area: ['suchraum']
+  stop_words: [uw, ua, sa, sst, ons, 'on', st, stl, us, kus, msa, spa, kvs, mn, station, stationen, umspannwerk, umspannanlage, umspannstation, schaltanlage, schaltstation, schalthaus, netzstation, ortsnetzstation, trafostation, unterstation, schwerpunktstation, knoten, netzknoten, leitung, leitungen, ltg, hsl, kabel, kbl, freileitung, freileitungen, strecke, stromkreis, stromkreise, trasse, verbindung, hs, ms, ns, hös, msp, nsp, hsp, höchstspannung, hochspannung, mittelspannung, niederspannung, kv, mva, vpe, neubau, ersatzneubau, enb, erneuerung, ersatz, austausch, tausch, trafotausch, erweiterung, verstärkung, netzverstärkung, ertüchtigung, umbau, errichtung, inbetriebnahme, zubeseilung, verkabelung, rückbau, demontage, sanierung, flm, trafo, trafos, transformator, transformatoren, umspanner, neues, neuer, neue, neu, und, u, inkl, mit, raum, suchraum, bg, bp, lfd, nr, nr., nap, maßnahme, maßnahmen, massnahme, projekt, anlage, anlagen, feld, felder, ls, schaltfeld, kompensationsspule, spule, blindleistungsanlage, netz, netze, teilnetz, teilnetzgebiet, gebiet, region, bereich, bezirk, ausbau, reko, neuanschluss, anschluss, netzanschluss, kundenanschluss, kunde, kunden, primärtechnik, sekundärtechnik, schutztechnik, leittechnik, fernwirktechnik, nb, ers, ern, erw, ölk, bl, tr, msk, nsk, hk, sh, mast, masten, endmast, schutz, ergebnisse, ringschluss, netzbetreiber, netzausbauplan, revision, retrofit, bau, abgang, anl, flt, stn, abzweig, bnetza, budget, pe, pvc, xlpe, papier, ersetzt, erneuerungs, topf, sammler, pauschal, seilauswechslung, umverlegung]
+  # A word ending in one of these (and at least two letters longer) is not a name.
+  stop_suffixes: [ung, ungen, maßnahme, maßnahmen, massnahme, bau, anlage, anlagen, kabel, leitung, leitungen, station, stationen, trafo, trafos, sammler, bedarf, anschluss, anschlüsse, gebiet, umspanner, spule, technik, tausch, netz, netze, ausbau, strecke, trasse, projekt, vorhaben, gruppe, programm, index, strategie, konzept, plan, kunden, betreiber, ebene, gebieten, verteilung, infrastruktur, schrank, schränke, kuppler, masten, bedingt, bedingte, bedingter, bedingten, liche, licher, lichen, arbeiten, zuwachs, bedarfe, schutz, flächen, erneuerungs, investitions, abschnitt, abschnitten, kunde, wechsel, seile, speicher, stufe, drossel, ersatz]
+  connectors: [am, an, der, die, dem, den, im, in, zum, zur, bei, auf, ob, vor, a.d., i., a., d., unterm, überm, hinter]
+  generic_names: [nap maßnahme, netzoptimierung – netz, netzentflechtung – netz]
+  # Grid object IDs in name/description: line numbers, plant numbers, station/node codes.
+  object_ref_pattern: '\bBl\.?\s?\d{3,4}\b|\bBL\d{3,4}\b|\bAnl(?:age|\.)\s?\d{3,6}\b|\b\d{2,3}-NK-\d+\b|\bUW\s?\d{1,3}\b|\b(?:Tr|T|O|E|V|Z|J|Q|N|B|H|L)\d{1,4}[a-z]?\b'
+validation:
+  dso_count: {pass: [80, 90], warn: [70, 100]}
+  measure_share: {pass: 0.95, warn: 0.90}
+  vocabulary: {pass: 0.99, warn: 0.95}
+  coverage: {pass: 0.80, warn: 0.50}
+  plausibility:
+    reported_amount_eur: [0, 1000000000]
+    capacity_change_mva: [-1000, 1000]
+    substation_capacity_change_mva: [-1000, 1000]
+    line_length_km: [0, 500]

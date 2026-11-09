@@ -14,6 +14,23 @@ The publications do not follow a modern data standard. Places and measures are d
 
 gridAhead is a cooperation of the [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/) and [Goal100](https://goal100.org/). [Google.org](https://www.google.org/) and the [Veolia Stiftung](https://www.stiftung.veolia.de/) co-fund the work.
 
+## Development
+
+Requires Node.js 24+, [pnpm](https://pnpm.io/) and [uv](https://docs.astral.sh/uv/).
+
+```bash
+pnpm install
+pnpm dev     # all apps
+pnpm test
+pnpm lint
+pnpm build
+```
+
+Apps:
+
+- `apps/docs`: project website.
+- `apps/nap_tool`: extracts and reviews tables from grid expansion plans. It needs the separate `nap_data` repository (internal GitLab); set `NAP_DATA_DIR` in `apps/nap_tool/.env`. See [apps/nap_tool/README.md](apps/nap_tool/README.md). For live frontend work, run `pnpm --filter nap-tool-ui dev:ui` next to `pnpm dev` and open the Vite URL.
+
 ## Cooperation
 
 <a href="https://reiner-lemoine-institut.de/">
