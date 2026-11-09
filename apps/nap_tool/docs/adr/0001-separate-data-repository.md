@@ -1,3 +1,11 @@
+<!--
+SPDX-FileCopyrightText: 2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut
+SPDX-FileCopyrightText: 2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut
+SPDX-FileCopyrightText: 2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Data lives in a separate repository, the database holds only metadata
 
 PDFs and tables used to be BLOBs in one 333 MB SQLite file: opaque, not diffable, not traceable outside the tool. All payload now lives as files in the separate git repository `nap_data` (`$NAP_DATA_DIR`, pushed only to the internal GitLab so data never reaches GitHub); `nap_tool.sqlite` beside them stores metadata, relationships, review state and each file's relative path with its SHA-256. Files are checked against their hash when read and never edited in place; a new result is a new file.
