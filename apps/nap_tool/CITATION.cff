@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut
+# SPDX-FileCopyrightText: 2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut
+# SPDX-FileCopyrightText: 2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut
+# SPDX-License-Identifier: CC0-1.0
+
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+authors:
+  - family-names: "Huyskens"
+    given-names: "Hendrik"
+    alias: "henhuy"
+    affiliation: "Reiner Lemoine Institut"
+    orcid: "https://orcid.org/0000-0002-8926-5042"
+  - family-names: "Amme"
+    given-names: "Jonathan"
+    alias: "nesnoj"
+    affiliation: "Reiner Lemoine Institut"
+    orcid: "https://orcid.org/0000-0002-8563-5261"
+title: "NAP Tool"
+type: software
+license: Apache-2.0
+version: 0.1.0
+date-released: 2026-11-09
+url: "https://github.com/rl-institut/nap_tool"

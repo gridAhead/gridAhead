@@ -1,4 +1,5 @@
 packages:
   - "apps/*"
+  - "apps/nap_tool/src/nap_tool/ui/frontend"
   - "packages/*"
   - "modules/*"
