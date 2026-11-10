@@ -29,6 +29,23 @@ from nap_tool.database.repository import (
 from nap_tool.database.schema import connect
 
 
+def test_source_nap_year_overrides_title_inference(tmp_path: Path) -> None:
+    """A round stated by the source wins over a year guessed from the title."""
+    database = tmp_path / "nap_tool.sqlite"
+    candidate = Candidate(
+        "vnb",
+        "VNB",
+        "vnbdigital",
+        "id-1",
+        "Bericht_2025.pdf",
+        "https://example.org/a",
+        nap_year=2026,
+    )
+    store_candidates(database, [candidate])
+    with connect(database) as connection:
+        assert connection.execute("SELECT nap_year FROM document").fetchone()[0] == 2026
+
+
 def test_discover_download_and_force_version(tmp_path: Path) -> None:
     """A discovered document remains pending until downloaded and keeps versions."""
     database = tmp_path / "nap_tool.sqlite"
