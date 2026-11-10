@@ -20,6 +20,17 @@ uv sync --extra llamaparse    # optional LlamaParse Agentic extraction
 uv sync --extra llmpdf        # llmPDF extraction and Review UI
 ```
 
+On Windows on ARM, PyTorch (needed by Docling) has no `win_arm64` wheel.
+Create the environment once with x64 Python, which Windows runs emulated:
+
+```powershell
+uv python install cpython-3.12-windows-x86_64-none
+uv sync --extra docling --python cpython-3.12-windows-x86_64-none
+```
+
+Later `uv sync` and `uv run` calls keep using that x64 environment. Docling
+runs slower under emulation; WSL with Linux ARM wheels is the faster option.
+
 Run commands via `uv run`:
 
 ```bash
