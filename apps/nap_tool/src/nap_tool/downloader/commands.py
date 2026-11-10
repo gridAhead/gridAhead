@@ -60,7 +60,8 @@ def discover(
                         source_document_id=item["document_id"],
                         title=item["document_name"],
                         source_url=item["source_url"],
-                        version=str(item["current_from"]) if item["current_from"] else None,
+                        version=item["version"],
+                        nap_year=item["nap_year"],
                     )
                 )
         for configured in config.providers:

@@ -199,8 +199,10 @@ erDiagram
 `run` is one `download` invocation; `document` keeps full history — a new row
 per download, never overwritten. `table_extracted` and `table_compared` stay
 overwrite-in-place (upsert on document/extractor and on comparator output),
-no history kept for those two. `current_from`/`current_to` is VNBdigital's
-own validity window, not a publication date. `pages_json`/`regions_json`
+no history kept for those two. `current_from`/`current_to` was VNBdigital's
+own validity window; VNBdigital no longer provides one, so `discover` now
+stores the publication date (or the upload date when that is missing) as the
+version and leaves `current_to` empty. `pages_json`/`regions_json`
 hold per-page numbers and bounding boxes as JSON text rather than child
 tables. Failed extraction attempts are not persisted — only successful
 `table_extracted` rows exist in the DB.
