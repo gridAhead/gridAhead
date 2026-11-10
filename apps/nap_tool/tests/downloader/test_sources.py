@@ -174,6 +174,16 @@ def test_discover_vnbdigital_returns_candidates_without_downloading(monkeypatch)
     assert sources.discover_vnbdigital(VnbDigitalConfig()) == [candidate]
 
 
+@pytest.mark.network
+def test_live_portal_still_lists_nap_reports() -> None:
+    """Calls the real VNBdigital portal (about 100 requests); run with `pytest -m network`."""
+    candidates = sources.discover_vnbdigital(VnbDigitalConfig())
+
+    assert candidates
+    assert all(item["nap_year"] for item in candidates)
+    assert all("fileId=" in item["source_url"] for item in candidates)
+
+
 def test_download_vnbdigital_pdf_validates_bytes(monkeypatch) -> None:
     """Downloading a candidate returns validated bytes without writing files."""
 
