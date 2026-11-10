@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 from fastapi.testclient import TestClient
+from filelock import FileLock
 from typer.testing import CliRunner
 
 from nap_tool.classifier.config import load_config
@@ -242,14 +243,11 @@ def test_invalid_configuration_produces_clear_cli_error(repository, monkeypatch,
 
 
 def test_busy_run_is_rejected_without_changing_outputs(repository):
-    import fcntl
-
     root, _, _ = repository
     run(root, 1)
     output = root / "classified/set_1/scheme_1/classified.csv"
     before = output.read_bytes()
-    with (root / "classified/set_1/.scheme_1.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with FileLock(root / "classified/set_1/.scheme_1.lock", timeout=0):
         with pytest.raises(ValueError, match="already running"):
             run(root, 1)
     assert output.read_bytes() == before

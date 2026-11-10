@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import csv
-import fcntl
 import hashlib
 import io
 import json
@@ -19,6 +18,8 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
+
+from filelock import FileLock, Timeout
 
 from nap_tool.data import checked_file, resolve_path
 from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, require_version
@@ -260,11 +261,11 @@ def run(
     set_id = state["set_id"]
     parent = root / "classified" / f"set_{set_id}"
     parent.mkdir(parents=True, exist_ok=True)
-    with (parent / f".scheme_{scheme_id}.lock").open("a") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            raise ValueError("Classification is already running for this scheme") from error
+    try:
+        acquired = FileLock(parent / f".scheme_{scheme_id}.lock", timeout=0).acquire()
+    except Timeout as error:
+        raise ValueError("Classification is already running for this scheme") from error
+    with acquired:
         state = inputs(root, scheme_id, config_path, set_id=set_id)
         rows, headers, mapping = load_rows(state)
         result = classify(rows, state["config"], state["identifiers"], field_mapping=mapping)
