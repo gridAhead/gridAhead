@@ -13,4 +13,4 @@ SPDX-License-Identifier: Apache-2.0
 ## Consequences
 
 - Any change an older or newer `nap_tool` would misread (SQL schema, seeded ids, path layout, parsed file formats) bumps `DB_VERSION`; `tests/test_db_version.py` fails whenever `SCHEMA` changes.
-- An upgrade is an explicit step that sets the new `user_version` in the same transaction as its changes.
+- An upgrade is an explicit step (`nap-tool upgrade`). A step that changes only SQL sets the new `user_version` in the same transaction as its changes; a step that changes files cannot, so it changes the files first, must be safe to rerun, and sets the new `user_version` last.

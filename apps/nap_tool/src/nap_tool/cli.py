@@ -10,6 +10,7 @@ import typer
 
 from nap_tool.classifier.commands import classify_command
 from nap_tool.database.migrate import migrate
+from nap_tool.database.upgrade import upgrade
 from nap_tool.downloader.commands import discover, download, sync_identifiers
 from nap_tool.extractor.commands import extract
 from nap_tool.ui.commands import ui
@@ -20,6 +21,7 @@ app.command(name="sync-dso-identifiers")(sync_identifiers)
 app.command(name="download")(download)
 app.command(name="extract")(extract)
 app.command(name="migrate")(migrate)
+app.command(name="upgrade")(upgrade)
 app.command(name="classify")(classify_command)
 
 

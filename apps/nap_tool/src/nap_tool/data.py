@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -113,6 +114,29 @@ def write_bytes(root: Path, relative: str, content: bytes) -> str:
     finally:
         temporary.unlink(missing_ok=True)
     return digest
+
+
+def replace_file(source: Path, destination: Path, attempts: int = 20) -> None:
+    """Atomically replace a file, retrying while Windows reports it in use.
+
+    Windows refuses to replace a file another process holds open; readers of small
+    files such as pointers hold them only briefly.
+
+    Args:
+        source: Complete file in the destination's directory.
+        destination: File to replace.
+        attempts: Tries, 50 ms apart.
+
+    Raises:
+        PermissionError: If the destination stays in use for every attempt.
+    """
+    for _ in range(attempts - 1):
+        try:
+            source.replace(destination)
+            return
+        except PermissionError:
+            time.sleep(0.05)
+    source.replace(destination)
 
 
 def checked_file(root: Path, relative: str, digest: str) -> Path:

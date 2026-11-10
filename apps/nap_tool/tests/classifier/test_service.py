@@ -21,6 +21,7 @@ from nap_tool.classifier.service import (
     CONFIG_PATH,
     OUTPUT_FILES,
     output_status,
+    published_directory,
     run,
     year_config_path,
 )
@@ -28,6 +29,11 @@ from nap_tool.cli import app
 from nap_tool.data import sha256_file
 from nap_tool.database.schema import connect
 from nap_tool.ui.server import create_app
+
+
+def current_output(root: Path, scheme_id: int = 1, set_id: int = 1) -> Path:
+    """Re-read the pointer, so a later run is seen rather than a pinned generation."""
+    return published_directory(root / f"classified/set_{set_id}", scheme_id)
 
 
 @pytest.fixture
@@ -94,8 +100,7 @@ def test_files_provenance_determinism_and_staleness(repository):
     before = source.read_bytes()
     metadata_before = (root / "nap_tool.sqlite").read_bytes()
     result = run(root, 1)
-    output = root / "classified/set_1/scheme_1"
-    first = {file: (output / file).read_bytes() for file in OUTPUT_FILES}
+    first = {file: (current_output(root) / file).read_bytes() for file in OUTPUT_FILES}
     assert result.rows[0]["source_cells_json"] == original["source_cells_json"]
     assert result.rows[0]["Maßnahme"] == original["Maßnahme"]
     assert result.rows[0]["dso_mastr_nr"] == "ABC"
@@ -104,14 +109,14 @@ def test_files_provenance_determinism_and_staleness(repository):
     assert (root / "nap_tool.sqlite").read_bytes() == metadata_before
     assert not output_status(root, 1)["stale"]
     run(root, 1)
-    assert first == {file: (output / file).read_bytes() for file in OUTPUT_FILES}
+    assert first == {file: (current_output(root) / file).read_bytes() for file in OUTPUT_FILES}
     with connect(root / "nap_tool.sqlite") as db:
         db.execute("UPDATE dso SET bdew_code='456'")
     assert output_status(root, 1)["stale"]
     source.write_text("modified", encoding="utf-8")
     with pytest.raises(RuntimeError, match="Missing or modified"):
         run(root, 1)
-    assert first == {file: (output / file).read_bytes() for file in OUTPUT_FILES}
+    assert first == {file: (current_output(root) / file).read_bytes() for file in OUTPUT_FILES}
 
 
 @pytest.mark.parametrize("status,code", [("pass", 0), ("warn", 3), ("fail", 4)])
@@ -127,7 +132,7 @@ def test_cli_exit_codes(repository, monkeypatch, tmp_path, status, code):
     monkeypatch.setenv("NAP_DATA_DIR", str(root))
     result = CliRunner().invoke(app, ["classify", "--scheme-id", "1", "--config-path", str(path)])
     assert result.exit_code == code, result.output
-    assert all((root / "classified/set_1/scheme_1" / file).is_file() for file in OUTPUT_FILES)
+    assert all((current_output(root) / file).is_file() for file in OUTPUT_FILES)
 
 
 def test_missing_scheme_missing_output_and_required_fields(repository):
@@ -174,7 +179,7 @@ def test_ui_run_preview_filters_and_download(repository):
         for file in OUTPUT_FILES:
             assert client.get("/api/classify/schemes/1/download/" + file).status_code == 200
         assert client.get("/api/classify/schemes/1/download/secret.txt").status_code == 404
-        (root / "classified/set_1/scheme_1/classified.csv").write_text("corrupt", encoding="utf-8")
+        (current_output(root) / "classified.csv").write_text("corrupt", encoding="utf-8")
         assert client.get("/api/classify/schemes/1/preview").status_code == 409
 
 
@@ -184,7 +189,7 @@ def test_legacy_report_expected_values_do_not_modify_saved_results(
 ):
     root, _, _ = repository
     run(root, 1)
-    directory = root / "classified/set_1/scheme_1"
+    directory = current_output(root)
     report_path = directory / "validation_report.json"
     report = json.loads(report_path.read_text(encoding="utf-8"))
     for item in report["metrics"]:
@@ -245,12 +250,20 @@ def test_invalid_configuration_produces_clear_cli_error(repository, monkeypatch,
 def test_busy_run_is_rejected_without_changing_outputs(repository):
     root, _, _ = repository
     run(root, 1)
-    output = root / "classified/set_1/scheme_1/classified.csv"
-    before = output.read_bytes()
+    before = (current_output(root) / "classified.csv").read_bytes()
     with FileLock(root / "classified/set_1/.scheme_1.lock", timeout=0):
         with pytest.raises(ValueError, match="already running"):
             run(root, 1)
-    assert output.read_bytes() == before
+    assert (current_output(root) / "classified.csv").read_bytes() == before
+
+
+@pytest.mark.parametrize("content", ["../../nap_tool.sqlite", "garbage"])
+def test_malformed_pointer_is_refused(repository, content):
+    root, _, _ = repository
+    run(root, 1)
+    (root / "classified/set_1/scheme_1.current").write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match="Malformed classification pointer"):
+        output_status(root, 1)
 
 
 def test_selected_sets_have_separate_results_and_downloads(repository):
@@ -279,7 +292,7 @@ def test_selected_sets_have_separate_results_and_downloads(repository):
         )
     with TestClient(create_app(root)) as client:
         assert client.post("/api/classify/schemes/1/run?set_id=1").status_code == 200
-        before = (root / "classified/set_1/scheme_1/classified.csv").read_bytes()
+        before = (current_output(root) / "classified.csv").read_bytes()
         assert not client.get("/api/classify/schemes/1?set_id=2").json()["has_output"]
         assert client.get("/api/classify/schemes/1/preview?set_id=2").status_code == 404
         assert client.post("/api/classify/schemes/1/run?set_id=2").status_code == 200
@@ -291,7 +304,7 @@ def test_selected_sets_have_separate_results_and_downloads(repository):
             )
             assert name in download.text
             assert not client.get(f"/api/classify/schemes/1?set_id={set_id}").json()["stale"]
-        assert before == (root / "classified/set_1/scheme_1/classified.csv").read_bytes()
+        assert before == (current_output(root) / "classified.csv").read_bytes()
         assert client.post("/api/classify/schemes/1/run?set_id=999").status_code == 409
 
 
@@ -311,7 +324,7 @@ def test_classification_accepts_explicit_set_without_initial_set(repository):
 def test_classification_scheme_outputs_are_independent(repository):
     root, _, _ = repository
     run(root, 1, set_id=1)
-    first = (root / "classified/set_1/scheme_1/classified.csv").read_bytes()
+    first = (current_output(root) / "classified.csv").read_bytes()
     with connect(root / "nap_tool.sqlite") as db:
         db.execute(
             "INSERT INTO harmonize_scheme(id,name,slug,initial_set_id,created_at,updated_at) "
@@ -327,11 +340,11 @@ def test_classification_scheme_outputs_are_independent(repository):
             "source_manifest_hash,generated_at FROM harmonize_set_output WHERE scheme_id=1"
         )
     run(root, 2, set_id=1)
-    assert (root / "classified/set_1/scheme_1/classified.csv").read_bytes() == first
-    assert (root / "classified/set_1/scheme_2/classified.csv").is_file()
+    assert (current_output(root) / "classified.csv").read_bytes() == first
+    assert (current_output(root, 2) / "classified.csv").is_file()
     assert not output_status(root, 1, set_id=1)["stale"]
     assert not output_status(root, 2, set_id=1)["stale"]
-    manifest_path = root / "classified/set_1/scheme_2/run_manifest.json"
+    manifest_path = current_output(root, 2) / "run_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["set_id"] = 999
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")

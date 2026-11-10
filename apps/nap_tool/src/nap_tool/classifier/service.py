@@ -12,6 +12,7 @@ import csv
 import hashlib
 import io
 import json
+import re
 import shutil
 import sqlite3
 import uuid
@@ -21,7 +22,7 @@ from typing import Iterator
 
 from filelock import FileLock, Timeout
 
-from nap_tool.data import checked_file, resolve_path
+from nap_tool.data import checked_file, replace_file, resolve_path
 from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, require_version
 
 from . import ClassificationResult, classify
@@ -36,6 +37,7 @@ OUTPUT_FILES = (
     "validation_report.json",
     "unmapped_values.csv",
 )
+VERSIONS_DIR = ".versions"  # holds output generations; see ADR-0006
 
 
 def json_bytes(value: object) -> bytes:
@@ -284,12 +286,13 @@ def run(
             hashes={name: hashlib.sha256(data).hexdigest() for name, data in contents.items()},
         )
         contents["run_manifest.json"] = json_bytes(manifest)
-        # Publish a single symlink to a complete immutable generation, so all files switch together.
-        versions = parent / ".versions"
+        # Write a complete immutable generation, then switch the pointer to it, so all
+        # files switch together (ADR-0006).
+        versions = parent / VERSIONS_DIR
         versions.mkdir(exist_ok=True)
-        destination = versions / f"scheme_{scheme_id}_{uuid.uuid4().hex}"
+        generation = f"scheme_{scheme_id}_{uuid.uuid4().hex}"
+        destination = versions / generation
         destination.mkdir()
-        link = parent / f".scheme_{scheme_id}_{uuid.uuid4().hex}.tmp"
         try:
             for name, content in contents.items():
                 (destination / name).write_bytes(content)
@@ -298,20 +301,77 @@ def run(
                 != state["fingerprint"]
             ):
                 raise ValueError("Input changed during classification; run again")
-            link.symlink_to(destination.relative_to(parent), target_is_directory=True)
-            link.replace(parent / f"scheme_{scheme_id}")
+            publish_pointer(parent, scheme_id, generation)
         except BaseException:
             shutil.rmtree(destination)
             raise
-        finally:
-            link.unlink(missing_ok=True)
         return result
+
+
+def is_generation(scheme_id: int, name: str) -> bool:
+    """Tell whether a name is an output generation of a scheme.
+
+    Args:
+        scheme_id: Harmonization scheme.
+        name: Candidate directory name under `.versions/`.
+
+    Returns:
+        True for `scheme_<scheme>_<32 hex>`; separators and `..` never match.
+    """
+    return re.fullmatch(rf"scheme_{scheme_id}_[0-9a-f]{{32}}", name) is not None
+
+
+def publish_pointer(set_directory: Path, scheme_id: int, generation: str) -> None:
+    """Atomically point a scheme at an existing output generation.
+
+    Args:
+        set_directory: `classified/set_<set>` directory.
+        scheme_id: Harmonization scheme.
+        generation: Directory name under `.versions/`.
+
+    Raises:
+        ValueError: If the generation name does not belong to the scheme.
+        PermissionError: If the pointer stays in use by another process.
+    """
+    if not is_generation(scheme_id, generation):
+        raise ValueError(f"Invalid classification generation for scheme {scheme_id}")
+    pointer = _pointer(set_directory, scheme_id)
+    temporary = pointer.with_name(f".{pointer.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_text(generation, encoding="utf-8")
+    try:
+        replace_file(temporary, pointer)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def published_directory(set_directory: Path, scheme_id: int) -> Path:
+    """Return the output generation a scheme's pointer names.
+
+    Args:
+        set_directory: `classified/set_<set>` directory.
+        scheme_id: Harmonization scheme.
+
+    Returns:
+        Generation directory under `.versions/`.
+
+    Raises:
+        FileNotFoundError: If the scheme has no published output.
+        ValueError: If the pointer is malformed.
+    """
+    pointer = _pointer(set_directory, scheme_id)
+    generation = pointer.read_text(encoding="utf-8").strip()
+    if not is_generation(scheme_id, generation):
+        raise ValueError(f"Malformed classification pointer: {pointer.name}")
+    return set_directory / VERSIONS_DIR / generation
+
+
+def _pointer(set_directory: Path, scheme_id: int) -> Path:
+    return set_directory / f"scheme_{scheme_id}.current"
 
 
 def saved_output(root: Path, scheme_id: int, *, set_id: int | None = None) -> tuple[Path, dict]:
     set_id = selected_set(root, scheme_id, set_id)
-    prefix = f"classified/set_{set_id}"
-    directory = resolve_path(root, f"{prefix}/scheme_{scheme_id}")
+    directory = published_directory(resolve_path(root, f"classified/set_{set_id}"), scheme_id)
     manifest = json.loads((directory / "run_manifest.json").read_text(encoding="utf-8"))
     if manifest.get("scheme_id") != scheme_id or manifest.get("set_id") != set_id:
         raise ValueError("Classification output belongs to a different set or scheme")

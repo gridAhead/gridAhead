@@ -28,7 +28,10 @@ Coding standards: `CODING_STANDARDS.md`.
 - README "Folder layout", "Extract tables" and "Compare and accept tables" describe a
   removed pipeline; trust the code.
 - Bump `DB_VERSION` for anything a nap_tool of the other version would misread: SQL schema,
-  seeded ids, path layout, parsed file formats (ADR-0003).
+  seeded ids, path layout, parsed file formats (ADR-0003). Each bump needs a step in
+  `database/upgrade.py`; `nap-tool upgrade` applies it to nap_data.
+- Classification output is switched by a pointer file, not a symlink, so it works on
+  Windows (ADR-0006).
 - Classification rules live in `config/classify*.yaml`, output in `docs/classification.md`;
   patterns on case-folded text use `ss` for `ß`.
 - Before working on NAP 2026 data, record keys, asset codes or validation, read
