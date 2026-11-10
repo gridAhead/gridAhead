@@ -312,7 +312,7 @@ def saved_output(root: Path, scheme_id: int, *, set_id: int | None = None) -> tu
     set_id = selected_set(root, scheme_id, set_id)
     prefix = f"classified/set_{set_id}"
     directory = resolve_path(root, f"{prefix}/scheme_{scheme_id}")
-    manifest = json.loads((directory / "run_manifest.json").read_text())
+    manifest = json.loads((directory / "run_manifest.json").read_text(encoding="utf-8"))
     if manifest.get("scheme_id") != scheme_id or manifest.get("set_id") != set_id:
         raise ValueError("Classification output belongs to a different set or scheme")
     for name in OUTPUT_FILES:
@@ -329,7 +329,7 @@ def output_status(
         directory, manifest = saved_output(root, scheme_id, set_id=set_id)
     except FileNotFoundError:
         return dict(has_output=False, stale=False, reason="", report=None)
-    report = json.loads((directory / "validation_report.json").read_text())
+    report = json.loads((directory / "validation_report.json").read_text(encoding="utf-8"))
     try:
         if any("expected" not in item for item in report["metrics"]):
             report = with_metric_expectations(report, load_config(config_path).validation)

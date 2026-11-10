@@ -56,7 +56,7 @@ def repository(tmp_path):
     )
     path = tmp_path / "harmonized/scheme_1/output.csv"
     path.parent.mkdir(parents=True)
-    with path.open("w", newline="") as stream:
+    with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, headers)
         writer.writeheader()
         writer.writerow(values)
@@ -108,7 +108,7 @@ def test_files_provenance_determinism_and_staleness(repository):
     with connect(root / "nap_tool.sqlite") as db:
         db.execute("UPDATE dso SET bdew_code='456'")
     assert output_status(root, 1)["stale"]
-    source.write_text("modified")
+    source.write_text("modified", encoding="utf-8")
     with pytest.raises(RuntimeError, match="Missing or modified"):
         run(root, 1)
     assert first == {file: (output / file).read_bytes() for file in OUTPUT_FILES}
@@ -117,13 +117,13 @@ def test_files_provenance_determinism_and_staleness(repository):
 @pytest.mark.parametrize("status,code", [("pass", 0), ("warn", 3), ("fail", 4)])
 def test_cli_exit_codes(repository, monkeypatch, tmp_path, status, code):
     root, _, _ = repository
-    config = yaml.safe_load(Path("config/classify.yaml").read_text())
+    config = yaml.safe_load(Path("config/classify.yaml").read_text(encoding="utf-8"))
     config["validation"]["dso_count"] = {
         "pass": [1, 1] if status == "pass" else [2, 2],
         "warn": [1, 2] if status != "fail" else [2, 3],
     }
     path = tmp_path / "classify.yaml"
-    path.write_text(yaml.safe_dump(config, allow_unicode=True))
+    path.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
     monkeypatch.setenv("NAP_DATA_DIR", str(root))
     result = CliRunner().invoke(app, ["classify", "--scheme-id", "1", "--config-path", str(path)])
     assert result.exit_code == code, result.output
@@ -141,7 +141,7 @@ def test_missing_scheme_missing_output_and_required_fields(repository):
         db.execute("DELETE FROM harmonize_set_output")
     with pytest.raises(ValueError, match="no output"):
         run(root, 1)
-    path.write_text("dso_slug\ntest\n")
+    path.write_text("dso_slug\ntest\n", encoding="utf-8")
     with connect(root / "nap_tool.sqlite") as db:
         db.execute(
             "INSERT INTO harmonize_set_output VALUES (1,1,?,?,?,'now')",
@@ -174,7 +174,7 @@ def test_ui_run_preview_filters_and_download(repository):
         for file in OUTPUT_FILES:
             assert client.get("/api/classify/schemes/1/download/" + file).status_code == 200
         assert client.get("/api/classify/schemes/1/download/secret.txt").status_code == 404
-        (root / "classified/set_1/scheme_1/classified.csv").write_text("corrupt")
+        (root / "classified/set_1/scheme_1/classified.csv").write_text("corrupt", encoding="utf-8")
         assert client.get("/api/classify/schemes/1/preview").status_code == 409
 
 
@@ -186,21 +186,21 @@ def test_legacy_report_expected_values_do_not_modify_saved_results(
     run(root, 1)
     directory = root / "classified/set_1/scheme_1"
     report_path = directory / "validation_report.json"
-    report = json.loads(report_path.read_text())
+    report = json.loads(report_path.read_text(encoding="utf-8"))
     for item in report["metrics"]:
         del item["expected"]
-    report_path.write_text(json.dumps(report))
+    report_path.write_text(json.dumps(report), encoding="utf-8")
     manifest_path = directory / "run_manifest.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["hashes"]["validation_report.json"] = sha256_file(report_path)
-    manifest_path.write_text(json.dumps(manifest))
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     before = {path.name: path.read_bytes() for path in directory.iterdir()}
     config_path = Path("config/classify.yaml")
     if changed_config:
-        settings = yaml.safe_load(config_path.read_text())
+        settings = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         settings["validation"]["dso_count"]["pass"] = [81, 91]
         config_path = tmp_path / "changed-classify.yaml"
-        config_path.write_text(yaml.safe_dump(settings))
+        config_path.write_text(yaml.safe_dump(settings), encoding="utf-8")
 
     status = output_status(root, 1, config_path=config_path)
     assert status["stale"] is changed_config
@@ -216,10 +216,10 @@ def test_legacy_report_expected_values_do_not_modify_saved_results(
 def test_saved_expected_values_keep_original_criteria_after_config_changes(repository, tmp_path):
     root, _, _ = repository
     run(root, 1)
-    settings = yaml.safe_load(Path("config/classify.yaml").read_text())
+    settings = yaml.safe_load(Path("config/classify.yaml").read_text(encoding="utf-8"))
     settings["validation"]["dso_count"]["pass"] = [81, 91]
     config_path = tmp_path / "changed-classify.yaml"
-    config_path.write_text(yaml.safe_dump(settings))
+    config_path.write_text(yaml.safe_dump(settings), encoding="utf-8")
     status = output_status(root, 1, config_path=config_path)
     assert status["stale"] is True
     assert status["report"]["metrics"][0]["expected"] == "80–90"
@@ -230,13 +230,13 @@ def test_invalid_configuration_produces_clear_cli_error(repository, monkeypatch,
     root, _, _ = repository
     monkeypatch.setenv("NAP_DATA_DIR", str(root))
     path = tmp_path / "bad.yaml"
-    path.write_text("round: [broken")
+    path.write_text("round: [broken", encoding="utf-8")
     result = CliRunner().invoke(app, ["classify", "--scheme-id", "1", "--config-path", str(path)])
     assert result.exit_code == 1
     assert "Invalid classification YAML" in result.output
-    config = yaml.safe_load(Path("config/classify.yaml").read_text())
+    config = yaml.safe_load(Path("config/classify.yaml").read_text(encoding="utf-8"))
     config["locations"]["object_ref_pattern"] = "["
-    path.write_text(yaml.safe_dump(config, allow_unicode=True))
+    path.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
     result = CliRunner().invoke(app, ["classify", "--scheme-id", "1", "--config-path", str(path)])
     assert result.exit_code == 1
     assert "Invalid classification regex" in result.output
@@ -256,7 +256,7 @@ def test_busy_run_is_rejected_without_changing_outputs(repository):
 def test_selected_sets_have_separate_results_and_downloads(repository):
     root, source, original = repository
     second = source.with_name("second.csv")
-    with second.open("w", newline="") as stream:
+    with second.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, list(original))
         writer.writeheader()
         writer.writerow({**original, "Maßnahme": "Neubau UW Second"})
@@ -332,9 +332,9 @@ def test_classification_scheme_outputs_are_independent(repository):
     assert not output_status(root, 1, set_id=1)["stale"]
     assert not output_status(root, 2, set_id=1)["stale"]
     manifest_path = root / "classified/set_1/scheme_2/run_manifest.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["set_id"] = 999
-    manifest_path.write_text(json.dumps(manifest))
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with TestClient(create_app(root)) as client:
         response = client.get("/api/classify/schemes/2/preview?set_id=1")
         assert response.status_code == 409
@@ -354,7 +354,7 @@ def test_classification_scheme_outputs_are_independent(repository):
 )
 def test_unmapped_preview_filters_by_header_columns(repository, query, expected):
     root, source, original = repository
-    with source.open("w", newline="") as stream:
+    with source.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, list(original))
         writer.writeheader()
         writer.writerow({**original, "project_status": "Unklar"})
@@ -422,7 +422,7 @@ def test_year_config_path_prefers_single_year_file(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config").mkdir()
-    (tmp_path / "config/classify_2026.yaml").write_text("round: {}\n")
+    (tmp_path / "config/classify_2026.yaml").write_text("round: {}\n", encoding="utf-8")
     explicit = Path("other/classify.yaml")
     assert year_config_path(CONFIG_PATH, [2026]) == CONFIG_PATH.with_name("classify_2026.yaml")
     assert year_config_path(CONFIG_PATH, [2024]) == CONFIG_PATH

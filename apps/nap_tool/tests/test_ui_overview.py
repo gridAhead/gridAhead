@@ -301,7 +301,7 @@ def test_markdown_documents_open_inline_as_text(
     assert response.text == content.decode()
     assert overview_client.get("/api/overview/documents/5/text").status_code == 404
     assert overview_client.get("/api/overview/documents/7/pdf").status_code == 404
-    (tmp_path / "documents/avacon/nap.md").write_text("changed")
+    (tmp_path / "documents/avacon/nap.md").write_text("changed", encoding="utf-8")
     assert overview_client.get("/api/overview/documents/7/text").status_code == 409
 
 

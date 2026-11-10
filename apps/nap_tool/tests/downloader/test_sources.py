@@ -112,7 +112,7 @@ def test_direct_url_download_writes_metadata(tmp_path: Path) -> None:
     sources.download_provider(provider, None, tmp_path / "raw")
 
     metadata_path = tmp_path / "raw" / "custom-grid" / "metadata.json"
-    metadata = json.loads(metadata_path.read_text())
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert (tmp_path / "raw" / "custom-grid" / "source.pdf").is_file()
     assert metadata["files"][0]["path"] == "source.pdf"
 

@@ -54,7 +54,10 @@ exclude = [
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "PLW1514"]
+# PLW1514 (unspecified-encoding) is a preview rule; enable it alone, not all of preview.
+preview = true
+explicit-preview-rules = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
