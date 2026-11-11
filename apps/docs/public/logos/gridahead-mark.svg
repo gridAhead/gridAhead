@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 12 57 48" role="img" aria-label="gridAhead">
+  <defs>
+    <clipPath id="gridahead-mark-cap"><rect x="0" y="12" width="65" height="48"/></clipPath>
+  </defs>
+  <g fill="none" stroke="#00C46A" clip-path="url(#gridahead-mark-cap)">
+    <path d="M13.5 62L32.5 10L51.5 62M19 47H46" stroke-width="6"/>
+    <path d="M25.9 28L46 47M39.1 28L19 47" stroke-width="3.6"/>
+  </g>
+  <rect x="8" y="21" width="49" height="6" fill="#00C46A"/>
+</svg>
