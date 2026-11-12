@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <clipPath id="icon-cap"><rect x="0" y="12" width="65" height="48"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0A0A0A"/>
+  <g transform="translate(32 32) scale(0.8) translate(-32.5 -35)">
+    <g fill="none" stroke="#00C46A" clip-path="url(#icon-cap)">
+      <path d="M13.5 62L32.5 10L51.5 62M19 47H46" stroke-width="8"/>
+      <path d="M25.9 28L46 47M39.1 28L19 47" stroke-width="4.8"/>
+    </g>
+    <rect x="6" y="19" width="53" height="8" fill="#00C46A"/>
+  </g>
+</svg>
