@@ -1,6 +1,25 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/gridahead-inverse.svg">
+  <img alt="gridAhead" src="apps/docs/public/logos/gridahead.svg" height="36">
+</picture>
+
 # gridAhead
 
 Geocode and georeference German distribution grid expansion plans so the public can use them.
+
+<a href="https://reiner-lemoine-institut.de/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/reiner-lemoine-institut-inverse.svg">
+    <img alt="Reiner Lemoine Institut" src="apps/docs/public/logos/reiner-lemoine-institut.svg" height="40">
+  </picture>
+</a>
+&emsp;
+<a href="https://goal100.org/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/goal100-inverse.svg">
+    <img alt="Goal100" src="apps/docs/public/logos/goal100.svg" height="48">
+  </picture>
+</a>
 
 Grid expansion is one of the tightest bottlenecks in the energy transition. The plans for the next years are already public: larger distribution system operators have to publish one [every two years](https://www.gesetze-im-internet.de/enwg_2005/__14d.html). They say where the network is expected to grow, which measures are foreseen, and on what timetable. That bears on private and public investment, on research, and on the political debate about where the transition can actually proceed.
 
@@ -30,22 +49,6 @@ Apps:
 
 - `apps/docs`: project website.
 - `apps/nap_tool`: extracts and reviews tables from grid expansion plans. It needs the separate `nap_data` repository (internal GitLab); set `NAP_DATA_DIR` in `apps/nap_tool/.env`. See [apps/nap_tool/README.md](apps/nap_tool/README.md). For live frontend work, run `pnpm --filter nap-tool-ui dev:ui` next to `pnpm dev` and open the Vite URL.
-
-## Cooperation
-
-<a href="https://reiner-lemoine-institut.de/">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/reiner-lemoine-institut-inverse.svg">
-    <img alt="Reiner Lemoine Institut" src="apps/docs/public/logos/reiner-lemoine-institut.svg" height="40">
-  </picture>
-</a>
-&emsp;
-<a href="https://goal100.org/">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/goal100-inverse.svg">
-    <img alt="Goal100" src="apps/docs/public/logos/goal100.svg" height="48">
-  </picture>
-</a>
 
 ## Co-funded by
 

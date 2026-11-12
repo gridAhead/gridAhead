@@ -4,6 +4,10 @@ export default defineConfig({
   title: "gridAhead",
   description:
     "Geocode and georeference distribution grid expansion plans so the public can use them.",
+  logo: {
+    image: "/logos/gridahead.svg",
+    text: "",
+  },
   navigation: {
     tabs: [
       {
