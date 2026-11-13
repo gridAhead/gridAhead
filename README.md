@@ -50,6 +50,17 @@ Apps:
 - `apps/docs`: project website.
 - `apps/nap_tool`: extracts and reviews tables from grid expansion plans. It needs the separate `nap_data` repository (internal GitLab); set `NAP_DATA_DIR` in `apps/nap_tool/.env`. See [apps/nap_tool/README.md](apps/nap_tool/README.md). For live frontend work, run `pnpm --filter nap-tool-ui dev:ui` next to `pnpm dev` and open the Vite URL.
 
+## License
+
+gridAhead uses [REUSE](https://reuse.software/): every file states its license, either in an SPDX header or in [`REUSE.toml`](REUSE.toml). The license texts are in [`LICENSES/`](LICENSES/).
+
+- Code and configuration: [Apache-2.0](LICENSE)
+- Website texts in `apps/docs/content/`: [CC-BY-4.0](LICENSES/CC-BY-4.0.txt)
+- Citation metadata (`CITATION.cff`): [CC0-1.0](LICENSES/CC0-1.0.txt)
+- The gridAhead logo and the partner and funder logos are not openly licensed. They belong to their respective owners ([`LicenseRef-AllRightsReserved`](LICENSES/LicenseRef-AllRightsReserved.txt)).
+
+Check compliance with `uvx reuse lint`.
+
 ## Co-funded by
 
 <a href="https://www.google.org/">
