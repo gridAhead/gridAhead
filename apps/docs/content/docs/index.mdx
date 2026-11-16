@@ -8,17 +8,17 @@ sidebar:
 
 import Credits from "../../components/Credits.astro";
 
-gridAhead currently containts code for managing data extractions of grid expansion plans (Netzausbaupläne) that German distribution system operators publish on [VNBdigital](https://www.vnbdigital.de/). 
-The project's goal is to turn grid expansion plans into data (see our [our announcement post](/blog/2026-11-17-introducing-gridahead)).
+gridAhead currently contains code for managing data extractions of grid expansion plans (Netzausbaupläne) that German distribution system operators publish on [VNBdigital](https://www.vnbdigital.de/).
+The project's goal is to turn grid expansion plans into data (see our [announcement post](/blog/2026-11-17-introducing-gridahead)).
 
 ## What is in the repository today
 
 Two apps:
 
 - `apps/docs` is this site.
-- [`/apps/nap-tool`](/docs/nap-tool) is the only package that processes plans. It is a Python 3.12 command-line tool, `nap-tool`, and a review UI. 
+- [`apps/nap_tool`](/docs/nap-tool) is the only package that processes plans. It is a Python 3.12 command-line tool, `nap-tool`, and a review UI.
 
-We currently do not release any data ourselves, and only pipelines. This is because there are ongoing issues with the released plan's licenses.
+We currently publish only the pipelines, not data: most source files carry no licence, so reuse is not yet legally certain.
 
 ## Running it
 
@@ -29,6 +29,6 @@ pnpm install
 pnpm dev
 ```
 
-Install nap-tool from `apps/nap_tool` with `uv sync`. The extraction backends are extras: `docling`, `llmpdf`, and `llamaparse`. For live work on the review UI, run `pnpm --filter nap-tool-ui dev:ui` next to `pnpm dev` and open the Vite URL.
+Install nap-tool from `apps/nap_tool` with `uv sync`. The extraction backends are extras: `docling` and `llmpdf`. For live work on the review UI, run `pnpm --filter nap-tool-ui dev:ui` next to `pnpm dev` and open the Vite URL.
 
 <Credits />

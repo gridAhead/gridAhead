@@ -29,7 +29,7 @@ The 2026 round also brought improvements: most operators now publish their measu
 
 ## What gridAhead is building
 
-1. **Geocode planned measures.** Locate announced measures from both the 2024 and 2026 plans. This shows where and when the grid near a site will be reinforced.
+1. **Geocode planned measures.** Locate announced measures from both the 2024 and 2026 plans. This shows where and when the grid near a site is planned to be reinforced.
 2. **Georeference grid maps.** Wherever possible, digitize the grid maps in the plans and enrich them with other public data. The aim is open data on the current and planned medium-voltage grid in Germany, so studies can use topologies based on real grid maps instead of the synthetic or model grids mostly used today.
 3. **Make it accessible.** Publish results under open licences whenever possible, so others can keep working with them instead of starting from the original documents again. Data can be reused without legal uncertainty, and researchers can cite one versioned dataset instead of extracting the same PDFs again.
 4. **Build a community.** An open community that uses, reviews, and further develops the data and the methods. Many users improve both faster than any single team could.

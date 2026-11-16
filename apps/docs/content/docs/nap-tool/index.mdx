@@ -34,7 +34,7 @@ Details of the 2026 files that affect keys, asset codes, and validation are in [
 ```bash
 uv sync
 uv sync --extra docling       # local Docling extraction
-uv sync --extra llamaparse    # optional LlamaParse Agentic extraction
+uv sync --extra llamaparse    # LlamaParse adapter; not wired into `extract` yet
 uv sync --extra llmpdf        # llmPDF extraction and Review UI
 ```
 
@@ -64,33 +64,36 @@ uv run nap-tool ui            # review tables in the browser
 
 ```
 config/providers.yaml       # VNBdigital endpoint and exceptional provider sources
+config/classify*.yaml       # classification rules (see Classification)
 
 $NAP_DATA_DIR/              # separate nap_data repository; see its README
   nap_tool.sqlite           # metadata, selections, review status; no PDF/CSV BLOBs
   pdf/<slug>/<hash>.pdf     # downloaded source PDFs, named by content hash
   documents/<slug>/         # non-PDF source documents (XLSX, Markdown)
-  extracted/<slug>/         # extraction CSVs per PDF, tool and run
-  extract_reviewed/         # reviewed extraction CSVs
-  cleaned/                  # cleaning output CSVs and cell metadata
-  clean_reviewed/           # reviewed cleaning CSVs
-  harmonized/               # harmonized tables per set and scheme
-  scripts/                  # snapshots of extraction configs and cleaning code
+  extracted/<slug>/<hash>/<tool>/<run>/   # table_<nnn>.csv per extraction run
+  extract_reviewed/<extract>/             # reviewed extraction CSVs
+  cleaned/<extract>/        # cleaned CSVs and cell metadata
+  clean_reviewed/<clean>/   # reviewed cleaned CSVs
+  harmonized/<set>/<scheme>.csv           # harmonized table per set and scheme
+  classified/set_<set>/     # classification generations and current pointers
+  scripts/extract/, scripts/clean/        # snapshots of extraction and cleaning code
 
 src/nap_tool/
   cli.py                    # typer app; registers one subcommand per module
   config.py                 # loads and validates config/providers.yaml
-  downloader/
-    commands.py             # `download` subcommand
-    sources.py               # per-source-type fetch logic (hub / custom / manual)
+  data.py                   # paths and content-addressed writes in nap_data
+  downloader/               # `discover`, `download`, `sync-dso-identifiers`
   extractor/
-    commands.py             # `extract` subcommand
-    models.py               # shared CSV metadata contract
+    commands.py             # `extract` subcommand (docling or llmPDF)
+    models.py               # shared extraction metadata contract
     tools/
-      docling_tool.py        # local, free; struggles with image-only tables
-      llamaparse_tool.py      # cloud Agentic tier; optional and paid
-      llmpdf_tool.py          # adapter for the published llmPDF package
-  docling_importer/          # imports existing Docling output
-  comparator/                # bridge to the packaged llmPDF Review UI
+      docling_tool.py       # local, free; struggles with image-only tables
+      llmpdf_tool.py        # adapter for the published llmPDF package
+      llamaparse_tool.py    # adapter for the paid LlamaParse tier; not wired into `extract`
+  cleaning.py, harmonize.py # cleaning and harmonization logic used by the UI
+  classifier/               # `classify` subcommand and rules
+  database/                 # schema, repository, `upgrade`, `migrate`
+  ui/                       # `ui` subcommand: FastAPI server and review frontend
 ```
 
 `discover` asks VNBdigital for each DSO's grid expansion documents and
@@ -100,7 +103,7 @@ registered document counts as known from then on, even before its PDF is
 downloaded. `download` fetches the PDFs of registered documents that have none
 yet and stores each as `pdf/<slug>/<hash>.pdf`. Stored files are never
 overwritten, and the `document` table keeps every version. Extraction output
-remains tool-specific and unchanged by review.
+stays unchanged by review; reviews and cleaning write new files next to it.
 
 ## Table type settings
 
@@ -237,33 +240,28 @@ output layer.
 
 ## Extract tables
 
-Docling is the default local extractor:
+`extract` accepts two tools, `docling` (the default, runs locally) and `llmPDF`:
 
 ```bash
 uv run nap-tool extract --tool docling
 uv run nap-tool extract --tool docling --dso avacon-netz-gmbh
-```
-
-LlamaParse uses the paid Agentic tier and is never called unless selected
-explicitly. `LLAMA_CLOUD_API_KEY` must be present in the environment. Limit a
-run to specific one-based pages when possible:
-
-```bash
-uv run nap-tool extract --tool llamaparse --dso mainzer-netze-gmbh --pages 13
-```
-
-llmPDF is installed from PyPI and is never vendored or modified in this
-repository. Its output is normalized to the same `nap_table_<n>.csv` contract:
-
-```bash
-uv run nap-tool extract --tool llmPDF
 uv run nap-tool extract --tool llmPDF --dso avacon-netz-gmbh --pages 1,3-5
 ```
 
+`--dso` limits a run to one operator and `--document` to one document (exact
+title or ID). Documents that already have an extraction by the selected tool are
+skipped unless `--force` creates a new version. `--pages` selects pages for llmPDF
+only. llmPDF is installed from PyPI and is never vendored or modified in this
+repository.
+
 The source PDF is read from `pdf/<slug>/` after its SHA-256 is checked against
-the database; it is never modified. Extraction CSVs are stored below
-`extracted/<slug>/`, and llmPDF's native result is kept beside them in
-`native/`.
+the database; it is never modified. Each run is stored as
+`extracted/<slug>/<hash>/<tool>/<run>/table_<nnn>.csv`, and llmPDF's native
+result is kept beside the tables in `native/`. A snapshot of the tool version and
+adapter code goes to `scripts/extract/<tool>/`.
+
+The LlamaParse adapter (`extractor/tools/llamaparse_tool.py`, extra `llamaparse`)
+is not wired into `extract` at the moment.
 
 ## Review tables
 
@@ -271,9 +269,13 @@ the database; it is never modified. Extraction CSVs are stored below
 uv run nap-tool ui
 ```
 
-The command opens the overview at `http://127.0.0.1:8000/ui/overview`.
-Reviewed extraction CSVs are written to `extract_reviewed/`; the automatic CSVs
-under `extracted/` remain unchanged.
+The command checks the data version (see [Data version](#data-version)), then
+serves the UI at `http://127.0.0.1:8000/ui/overview` (`--host` and `--port`
+change the address). A reviewer confirms an extracted table, which is written to
+`extract_reviewed/<extract>/`, then cleans it: cleaned copies and their cell
+metadata go to `cleaned/<extract>/`, the reviewed cleaned table to
+`clean_reviewed/<clean>/`. The automatic CSVs under `extracted/` remain
+unchanged.
 
 ## Add a DSO source
 
@@ -318,7 +320,7 @@ don't need a new file — add the function to `sources.py` and wire it into
 
 1. Add `src/nap_tool/extractor/tools/<name>_tool.py` with an
    `extract(...) -> ExtractionMetadata` function matching `docling_tool.py` and
-   writing `nap_table_<n>.csv` files.
+   writing one CSV per table, named with `models.table_filename`.
 2. Add one dispatch branch in `src/nap_tool/extractor/commands.py`. Extractors
    never approve their own output; approval belongs to the review workflow.
 3. Add any new dependency to `pyproject.toml` — consider an optional extra
@@ -379,8 +381,10 @@ tables. Changing a Set’s filters invalidates its generated outputs.
 this nap_tool expects `DB_VERSION = 21` (`src/nap_tool/database/schema.py`). Every
 database open refuses another version and says whether to update nap_tool or
 nap_data, and `nap-tool ui` prints the version on startup. `connect()` creates the
-schema in an empty file and never upgrades; there is no upgrade path from earlier
-versions.
+schema in an empty file and never upgrades. If nap_data is older than this
+nap_tool, `uv run nap-tool upgrade` applies the steps in
+`src/nap_tool/database/upgrade.py` (the first starts at DB_VERSION 20); then commit
+and push nap_data so others pick up the new version.
 
 Bump `DB_VERSION` when a nap_tool built for the old value would fail on or misread
 data written under the new one, or the reverse: SQL schema, seeded ids such as

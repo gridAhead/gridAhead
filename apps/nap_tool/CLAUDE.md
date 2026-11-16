@@ -25,9 +25,8 @@ Coding standards: `CODING_STANDARDS.md`.
 
 ## Gotchas
 
-- The nap-tool docs page "Folder layout", "Extract tables" and "Compare and accept
-  tables" (`../docs/content/docs/nap-tool/index.mdx`) describe a removed pipeline; trust
-  the code.
+- The nap-tool docs page (`../docs/content/docs/nap-tool/index.mdx`) describes the CLI,
+  folder layout and data version; update it when commands, paths or `DB_VERSION` change.
 - Bump `DB_VERSION` for anything a nap_tool of the other version would misread: SQL schema,
   seeded ids, path layout, parsed file formats (ADR-0003). Each bump needs a step in
   `database/upgrade.py`; `nap-tool upgrade` applies it to nap_data.
