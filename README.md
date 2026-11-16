@@ -31,7 +31,7 @@ The publications do not follow a modern data standard. Places and measures are d
 2. **Georeference medium voltage maps.** Create the most comprehensive public data of current and future medium voltage grids in Germany.
 3. **Make it accessible.** Publish the result so others can keep working with it, instead of starting from the original documents again.
 
-gridAhead is a cooperation of the [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/) and [Goal100](https://goal100.org/). [Google.org](https://www.google.org/) and the [Veolia Stiftung](https://www.stiftung.veolia.de/) co-fund the work.
+gridAhead is a cooperation of the [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/) and [Goal100](https://goal100.org/).
 
 ## Development
 
@@ -50,15 +50,19 @@ Apps:
 - `apps/docs`: project website.
 - `apps/nap_tool`: extracts and reviews tables from grid expansion plans. It needs the separate `nap_data` repository (internal GitLab); set `NAP_DATA_DIR` in `apps/nap_tool/.env`. See [apps/nap_tool/README.md](apps/nap_tool/README.md). For live frontend work, run `pnpm --filter nap-tool-ui dev:ui` next to `pnpm dev` and open the Vite URL.
 
+## License
+
+gridAhead uses [REUSE](https://reuse.software/): every file states its license, either in an SPDX header or in [`REUSE.toml`](REUSE.toml). The license texts are in [`LICENSES/`](LICENSES/).
+
+- Code and configuration: [Apache-2.0](LICENSE)
+- Website texts in `apps/docs/content/`: [CC-BY-4.0](LICENSES/CC-BY-4.0.txt)
+- Citation metadata (`CITATION.cff`): [CC0-1.0](LICENSES/CC0-1.0.txt)
+- The gridAhead logo and the partner and funder logos are not openly licensed. They belong to their respective owners ([`LicenseRef-AllRightsReserved`](LICENSES/LicenseRef-AllRightsReserved.txt)).
+
+Check compliance with `uvx reuse lint`.
+
 ## Co-funded by
 
-<a href="https://www.google.org/">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/google-org-inverse.svg">
-    <img alt="Google.org" src="apps/docs/public/logos/google-org.svg" height="22">
-  </picture>
-</a>
-&emsp;
 <a href="https://www.stiftung.veolia.de/">
   <img alt="Veolia Stiftung" src="apps/docs/public/logos/veolia-stiftung.png" height="28">
 </a>
