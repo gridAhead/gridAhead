@@ -25,6 +25,7 @@ export default defineConfig({
   },
   i18n: {
     defaultLocale: "en",
+    parser: "dot",
     locales: [
       { code: "en", label: "English" },
       { code: "de", label: "Deutsch" },

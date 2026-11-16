@@ -1,0 +1,71 @@
+---
+title: Netzausbaupläne in Daten umwandeln
+type: blog
+date: 2026-11-17
+authors:
+  - name: Goal100
+    url: https://goal100.org/
+  - name: Reiner Lemoine Institut
+    url: https://reiner-lemoine-institut.de/
+description: Netzausbaupläne in Daten umwandeln, um die Nutzung von Stromnetzdaten zu verbessern.
+---
+
+import Credits from "../../components/Credits.astro";
+import BlogMeta from "../../components/BlogMeta.astro";
+
+<BlogMeta />
+
+**Berlin, 17. November 2026** — Stromnetze gehören zu den kritischsten Engpässen der Energiewende in Deutschland. Seit Ende Oktober veröffentlichen die größeren deutschen Verteilnetzbetreiber eine zweite Runde ihrer Netzausbaupläne mit zusammen über 33.000 Maßnahmen. Leider sind die derzeit verfügbaren Daten schwer für Forschung, Planung, Investitionsentscheidungen und Politik nutzbar und sie erfüllen oft nicht Open-Data-Standards. Um diese Situation zu verbessern, haben das Reiner Lemoine Institut (RLI) und Goal100 gridAhead ins Leben gerufen, ein Open-Source- und Open-Data Community-Projekt, das veröffentlichte Netzausbaupläne in zugängliche, georeferenzierte Datensätze umwandeln wird. Das Projekt ist online auf [www.gridahead.org](https://www.gridahead.org).
+
+## Netzausbaupläne: wichtig, aber schwer nutzbar [#grid-expansion-data]
+
+Ob neue Wind- und Solarparks, Batteriespeichersysteme, Wärmepumpen oder Ladeinfrastruktur für Elektrofahrzeuge ans Stromnetz angeschlossen werden können, hängt sehr davon ab, wie schnell die Verteilnetze modernisiert werden. Deutsche Verteilnetzbetreiber, die 100.000 Kund\*innen oder mehr bedienen, sind gesetzlich verpflichtet, regelmäßig Netzausbaupläne zu veröffentlichen. Die erste Runde im Jahr 2024 erschien ausschließlich als PDF. Die zweite Runde dieser Informationen ist immer noch schwer nutzbar. 80 von 85 Netzbetreibern liefern zusammen über 33.000 Maßnahmen, von denen etwa 20.000 laufend oder geplant sind. Elementare Informationen zur geographischen Lage bleiben weiterhin in der Regel unklar.
+
+## Pläne in offene, maschinenlesbare Daten umwandeln [#activities]
+
+Die Veröffentlichung 2026 brachte jedoch auch Verbesserungen: Die meisten Betreiber veröffentlichen ihre Maßnahmen nun als Excel-Tabellen in einem einheitlichen Format. Die Maßnahmen haben aber immer noch keine Koordinaten, die Rasterkarten sind weiterhin nur als Bilder in PDF-Berichten verfügbar und die meisten Daten werden nicht unter offenen Lizenzen veröffentlicht. Mit gridAhead wollen das RLI und Goal100 Netzausbaupläne in offen verfügbare georäumliche Datensätze umwandeln. Das Projekt konzentriert sich auf vier Kernaktivitäten:
+
+1. **Geplante Maßnahmen geokodieren.** Das Projekt lokalisiert angekündigte Maßnahmen aus den Ausbauplänen 2024 und 2026. Diese zeigen Projektentwickler\*innen, wo und wann das Netz in der Nähe eines Standorts verstärkt wird.
+2. **Netzkarten georeferenzieren.** Wo immer möglich, digitalisiert das Projekt die Netzkarten aus den Plänen und reichert sie mit weiteren öffentlichen Daten an. Ziel ist es, offene Daten zum bestehenden und geplanten Mittelspannungsnetz in Deutschland zu veröffentlichen. Netzstudien können dann Topologien auf Basis realer Netzkarten verwenden, statt der heute überwiegend genutzten synthetischen Verteilnetze oder Modellnetze.
+3. **Ergebnisse zugänglich machen.** Wann immer möglich, veröffentlicht das Projekt seine Ergebnisse unter offenen Lizenzen. So können andere direkt damit arbeiten, statt wieder mit den Originaldokumenten zu beginnen. Daten können ohne rechtliche Unsicherheit wiederverwendet werden und Forschende können einen versionierten Datensatz zitieren, anstatt dieselben PDFs erneut auszulesen.
+4. **Community aufbauen.** Rund um Daten und Methoden soll eine offene Community entstehen, die sie nutzt, prüft und weiterentwickelt. Gemeinsam verbessern viele Nutzende Daten und Methoden schneller, als es ein einzelnes Team könnte.
+
+> Wir wollen Ausbaupläne der Verteilnetze transparenter machen. Deshalb freue ich mich, bekannt zu geben, dass Goal100 und das RLI ab heute im neuen Projekt gridAhead zusammenarbeiten. Am RLI entwickeln wir seit mehr als einem Jahrzehnt offene Modelle und Tools für Verteilnetze. Im neuen Projekt bringen wir unsere Erfahrungen in der Energiesystemanalyse, Datenanalyse und Open Science ein. Das Ziel sind offene Daten zum Ausbau der Verteilnetze, mit denen die Öffentlichkeit arbeiten kann.
+>
+> — Kathrin Goldammer, RLI-Geschäftsführerin
+
+> Verständliche Netzausbaupläne sind elementar damit die Energiewende gelingt – sie sind wichtig für Unternehmen, Bürger\*innen, Behörden und für Wissenschaftler\*innen. Ein Akteur-übergreifendes Projekt, in welchem Kräfte gebündelt werden, ist daher längst überfällig. Es sollten sich nicht alle dieselbe Arbeit machen müssen. Wir laden daher weiterer Akteure ein, gemeinsam als breites Bündnis an dem Thema zu arbeiten und uns auf Github mitzuhelfen. Goal100 hat sich zum Ziel gesetzt, den Zugang zu wichtigen Energiewendedaten zu demokratisieren und niedrigschwelliger zu machen. Die Netzdaten, die wir mit gridAhead erarbeiten, gehören zu den wichtigsten und sie gehören uns allen.
+>
+> — Jakob Ortmann, Mitgründer von Goal100
+
+## Aufbau einer neuen Community rund um Netzausbaupläne [#community]
+
+Eine vielfältige Gruppe von Akteuren hat Interesse daran, deutsche Netzausbaupläne zu nutzen. Sie setzt sich aus dem privaten und öffentlichen Sektor sowie aus wissenschaftlichen Institutionen zusammen. Sie alle verbindet der Bedarf an zuverlässigen und genauen Daten. gridAhead zielt darauf ab, diese Akteure zusammenzubringen und Ideen zu bündeln. Interessierte Nutzende dieser Daten sind eingeladen, sich mit dem Projektteam in Verbindung zu setzen. Die Partner betonen, dass die Zugänglichkeit von Netzausbauplänen nicht mit dem Schutz kritischer Infrastruktur im Konflikt steht. Das Projekt konzentriert sich auf Informationen, die bereits von Netzbetreibern veröffentlicht werden, aber schwer zu analysieren sind und schwer für Planung, Forschung oder Politik weiter genutzt werden können.
+
+## Hintergrund [#background]
+
+Nach §§ [14d](https://www.gesetze-im-internet.de/enwg_2005/__14d.html) und [14e](https://www.gesetze-im-internet.de/enwg_2005/__14e.html) im deutschen Energiewirtschaftsgesetz (EnWG) müssen Verteilnetzbetreiber mit 100.000 oder mehr angeschlossenen Kund\*innen sowie kleinere Betreiber mit erheblicher Abregelung von Wind- oder PV-Strom alle zwei Jahre einen Netzausbauplan erstellen und auf der gemeinsamen Internetplattform der Verteilnetzbetreiber, [VNBdigital.de](https://www.vnbdigital.de/), veröffentlichen. Die Pläne geben an, wo das Netz wachsen soll, welche Maßnahmen geplant sind und wie der Zeitplan ist. Diese Informationen sind wichtig für private und öffentliche Investitionen, Forschung und den politischen Diskurs darüber, wo die Energiewende tatsächlich stattfinden kann und wo nicht. Das RLI und ein breites Bündnis aus Forschung, NGOs, Industrie und Verbänden hat bereits 2024 in einem [offenen Brief](https://reiner-lemoine-institut.de/offener-brief-an-bnetza-netzdaten-besser-nutzbar-machen/) an die Bundesnetzagentur (BNetzA) zum Handeln aufgerufen. Das neue Projekt ist der nächste Schritt zur Verbesserung der Nutzung der deutschen Netzausbaudaten. gridAhead dokumentiert Methoden und Ergebnisse auf [www.gridahead.org](https://www.gridahead.org) und im öffentlichen Repository [github.com/gridahead/gridahead](https://github.com/gridahead/gridahead).
+
+## Über das Reiner Lemoine Institut [#about-rli]
+
+Das Reiner Lemoine Institut (RLI) ist ein unabhängiges, gemeinnütziges Forschungsinstitut, das sich seit 2010 einer Zukunft mit 100 Prozent erneuerbaren Energien verpflichtet hat. In den drei Forschungsbereichen Transformation von Energiesystemen, Mobilität mit erneuerbaren Energien und Off-Grid Systems arbeiten RLI-Wissenschaftler\*innen anwendungsorientiert und wissenschaftlich an der Energie- und Verkehrswende in Deutschland und international. Seit seiner Gründung haben sich die am Institut entwickelten Open-Source-Modelle fest in der Energiesystemmodellierung etabliert. Die Mobilitäts- und Elektrifizierungskonzepte des RLI werden weltweit von Unternehmen und dem öffentlichen Sektor umgesetzt. [www.reiner-lemoine-institut.de](https://www.reiner-lemoine-institut.de/)
+
+## Über Goal100 [#about-goal100]
+
+Goal100 ist ein Think-and-Do-Tank, der gemeinnützige Datendienste mit Dienstleistungen für Projektentwickler und für Investoren kombiniert. Goal100 ist vor allem für seinen öffentlichen Windmonitor bekannt, der Genehmigungsdaten zu Windprojekten sammelt, und bietet ein kostenfreies Energiewende-Web-GIS auf [www.goal100.studio](https://www.goal100.studio) an. Die Initiative von Goal100 für gridAhead wird gemeinsam von [Google.org](https://www.google.org/) und der [Veolia Stiftung](https://www.stiftung.veolia.de/) kofinanziert und von der [ProjectTogether gGmbH](https://projecttogether.org/) gehostet.
+
+## Kontakte [#contacts]
+
+**Reiner Lemoine Institut**
+
+Kommunikation: Timo Beyer, +49 30 12084 3415, [presse@rl-institut.de](mailto:presse@rl-institut.de)
+
+Projektleitung: Jonathan Amme, Wissenschaftlicher Mitarbeiter Forschungsbereich Transformation von Energiesystemen, [jonathan.amme@rl-institut.de](mailto:jonathan.amme@rl-institut.de)
+
+**Goal100**
+
+Kommunikation: Saskia Burzynski, [burzynski@dwr-eco.com](mailto:burzynski@dwr-eco.com)
+
+Projektleitung: Jakob Ortmann, Mitgründer von Goal100 GmbH, [kontakt@goal100.eu](mailto:kontakt@goal100.eu)
+
+<Credits locale="de" />
