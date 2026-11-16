@@ -15,6 +15,8 @@ dependencies = [
     "python-dotenv>=1.0",
     "fastapi>=0.115,<1",
     "uvicorn>=0.30,<1",
+    "filelock>=3.13",
+    "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -52,7 +54,10 @@ exclude = [
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "PLW1514"]
+# PLW1514 (unspecified-encoding) is a preview rule; enable it alone, not all of preview.
+preview = true
+explicit-preview-rules = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

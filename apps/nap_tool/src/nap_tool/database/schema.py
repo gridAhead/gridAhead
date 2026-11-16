@@ -18,9 +18,9 @@ from typing import Iterator
 # on or misread data written under the new value, or the reverse: SQL schema,
 # seeded ids such as TABLE_TYPE_GRID_MEASURES, stored path layout, or file
 # formats the code parses. New documents, tables, reviews and outputs never bump
-# it. connect() never upgrades a database; an upgrade sets the new user_version
-# in the same transaction as its changes.
-DB_VERSION = 20
+# it. connect() never upgrades a database; `nap-tool upgrade` (database/upgrade.py)
+# applies a step's changes and then sets the new user_version.
+DB_VERSION = 21
 TABLE_TYPE_GRID_MEASURES = 1
 TABLE_TYPE_REGIONAL_SCENARIO_PARAMETERS = 2
 TYPE_SCHEMA = """
@@ -203,7 +203,8 @@ def require_version(connection: sqlite3.Connection, path: Path) -> None:
         )
     raise DatabaseVersionError(
         f"{path} has DB_VERSION {version}, older than this nap_tool ({DB_VERSION}); "
-        f"update nap_data (git -C {path.parent} pull)"
+        f"update nap_data (git -C {path.parent} pull); if it is still older, "
+        "run `nap-tool upgrade`"
     )
 
 

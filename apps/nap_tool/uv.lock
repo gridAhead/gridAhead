@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 resolution-markers = [
     "sys_platform == 'darwin'",
@@ -865,10 +865,12 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "filelock" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "typer" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "uvicorn" },
 ]
 
@@ -900,6 +902,7 @@ requires-dist = [
     { name = "docling", marker = "extra == 'all-extractors'", specifier = ">=2.60" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.60" },
     { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "filelock", specifier = ">=3.13" },
     { name = "llama-cloud", marker = "extra == 'all-extractors'", specifier = ">=0.1" },
     { name = "llama-cloud", marker = "extra == 'llamaparse'", specifier = ">=0.1" },
     { name = "llmpdf", marker = "extra == 'all-extractors'", specifier = "==0.7.1" },
@@ -908,6 +911,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "typer", specifier = ">=0.12" },
+    { name = "tzdata", marker = "sys_platform == 'win32'", specifier = ">=2024.1" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
 provides-extras = ["docling", "llamaparse", "llmpdf", "all-extractors"]

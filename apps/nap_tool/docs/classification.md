@@ -9,8 +9,10 @@ SPDX-License-Identifier: Apache-2.0
 # Classification
 
 `uv run nap-tool classify --scheme-id <id> [--set-id <id>]` (or **Run classification** in
-the UI) reads the harmonized table of a grid-measure set and writes, under
-`$NAP_DATA_DIR/classified/set_<set>/scheme_<scheme>/`:
+the UI) reads the harmonized table of a grid-measure set and writes a new generation
+`$NAP_DATA_DIR/classified/set_<set>/.versions/scheme_<scheme>_<uuid>/`. The generation
+named in `classified/set_<set>/scheme_<scheme>.current` is the current output
+(ADR-0006). Each generation holds:
 
 - `classified.csv`: every source column unchanged, plus the derived columns below.
 - `validation_report.md` / `.json`: metrics, flag counts, quality grades, dropped rows.
