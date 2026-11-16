@@ -26,6 +26,7 @@ from nap_tool.data import checked_file, replace_file, resolve_path
 from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, require_version
 
 from . import ClassificationResult, classify
+from .compact_sheet import CompactSheet, read_compact_sheet
 from .config import CONFIG_PATH, load_config
 from .rules import DERIVED_FIELDS
 from .validation import markdown_report, with_metric_expectations
@@ -133,6 +134,28 @@ def selected_set(root: Path, scheme_id: int, set_id: int | None) -> int:
         return effective_set
 
 
+def _compact_sheets(
+    connection: sqlite3.Connection, root: Path, config_path: Path
+) -> dict[str, CompactSheet]:
+    """Parse the compact sheet marked for each DSO in the config's NAP round."""
+    year = load_config(config_path).round.year
+    sheets = {}
+    for row in connection.execute(
+        "SELECT d.id, d.file_path, d.hash, v.slug FROM document d JOIN dso v ON v.id=d.dso_id "
+        "WHERE d.is_compact_sheet=1 AND d.nap_year=? ORDER BY v.slug",
+        (year,),
+    ):
+        try:
+            path = checked_file(root, row["file_path"], row["hash"])
+        except RuntimeError as error:
+            sheets[row["slug"]] = CompactSheet(
+                row["id"], f"compact sheet file unavailable: {error}"
+            )
+            continue
+        sheets[row["slug"]] = read_compact_sheet(path, row["id"])
+    return sheets
+
+
 def inputs(
     root: Path,
     scheme_id: int | None = None,
@@ -177,6 +200,7 @@ def inputs(
                 (scheme["id"],),
             )
         ]
+        compact_sheets = _compact_sheets(connection, root, config_path)
         identifiers = {
             row["slug"]: {key: row[key] or "" for key in ["name", "mastr_nr", "bdew_code"]}
             for row in connection.execute("SELECT * FROM dso ORDER BY slug")
@@ -207,6 +231,9 @@ def inputs(
                 "fields": fields,
                 "scheme_updated_at": scheme["updated_at"],
                 "identifiers": identifiers,
+                "compact_sheets": {
+                    slug: [sheet.document_id, sheet.error] for slug, sheet in compact_sheets.items()
+                },
                 "config": config.model_dump(),
             }
         )
@@ -217,6 +244,7 @@ def inputs(
         path=path,
         fields=fields,
         identifiers=identifiers,
+        compact_sheets=compact_sheets,
         config=config,
         fingerprint=fingerprint,
     )
@@ -270,7 +298,13 @@ def run(
     with acquired:
         state = inputs(root, scheme_id, config_path, set_id=set_id)
         rows, headers, mapping = load_rows(state)
-        result = classify(rows, state["config"], state["identifiers"], field_mapping=mapping)
+        result = classify(
+            rows,
+            state["config"],
+            state["identifiers"],
+            field_mapping=mapping,
+            compact_sheets=state["compact_sheets"],
+        )
         contents = {
             "classified.csv": csv_bytes(result.rows, headers + DERIVED_FIELDS),
             "validation_report.md": markdown_report(result.report).encode(),

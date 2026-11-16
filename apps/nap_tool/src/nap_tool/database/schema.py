@@ -20,7 +20,7 @@ from typing import Iterator
 # formats the code parses. New documents, tables, reviews and outputs never bump
 # it. connect() never upgrades a database; `nap-tool upgrade` (database/upgrade.py)
 # applies a step's changes and then sets the new user_version.
-DB_VERSION = 21
+DB_VERSION = 22
 TABLE_TYPE_GRID_MEASURES = 1
 TABLE_TYPE_REGIONAL_SCENARIO_PARAMETERS = 2
 TYPE_SCHEMA = """
@@ -86,10 +86,13 @@ CREATE TABLE IF NOT EXISTS document (
     source TEXT NOT NULL, version TEXT, current_to TEXT, file_path TEXT,
     nap_year INTEGER CHECK (nap_year BETWEEN 2000 AND 2100),
     is_selected INTEGER NOT NULL DEFAULT 1 CHECK (is_selected IN (0, 1)),
+    is_compact_sheet INTEGER NOT NULL DEFAULT 0 CHECK (is_compact_sheet IN (0, 1)),
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
     CHECK ((hash IS NULL) = (file_path IS NULL)),
     UNIQUE (dso_id, hash)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS document_compact_sheet
+    ON document(dso_id, nap_year) WHERE is_compact_sheet = 1;
 CREATE INDEX IF NOT EXISTS document_source ON document(dso_id, source, source_document_id);
 CREATE TABLE IF NOT EXISTS extract_table (
     id INTEGER PRIMARY KEY, document_id INTEGER NOT NULL REFERENCES document(id),

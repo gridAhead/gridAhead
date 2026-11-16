@@ -66,6 +66,11 @@ class DocumentYearUpdate(BaseModel):
     expected_updated_at: str
 
 
+class CompactSheetUpdate(BaseModel):
+    is_compact_sheet: bool
+    expected_updated_at: str
+
+
 class DsoIdentifiersUpdate(BaseModel):
     """Official identifiers for one electricity network operator."""
 
@@ -398,7 +403,7 @@ def create_app(root: Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=404, detail="DSO not found")
             rows = connection.execute(
                 "SELECT d.id, d.title, d.version, d.nap_year, d.source, d.is_selected, "
-                "d.file_path IS NOT NULL AS is_downloaded, d.file_path, "
+                "d.is_compact_sheet, d.file_path IS NOT NULL AS is_downloaded, d.file_path, "
                 "d.created_at, d.updated_at, "
                 "v.slug AS dso_slug, v.name AS vnb_name, "
                 "(SELECT COUNT(*) FROM extract_table e WHERE e.document_id=d.id) "
@@ -437,6 +442,50 @@ def create_app(root: Path | None = None) -> FastAPI:
                 (request.nap_year, stamp, document_id),
             )
         return {"id": document_id, "year": request.nap_year, "updated_at": stamp}
+
+    @app.patch("/api/overview/documents/{document_id}/compact-sheet")
+    def update_document_compact_sheet(
+        document_id: int, request: CompactSheetUpdate
+    ) -> dict[str, object]:
+        """Mark or unmark a document as its DSO's compact sheet for its NAP round.
+
+        Marking replaces the DSO's previous compact sheet of the same round.
+        """
+        with connect(repository / "nap_tool.sqlite") as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT dso_id, nap_year, file_path, updated_at FROM document WHERE id=?",
+                (document_id,),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Document not found")
+            if row["updated_at"] != request.expected_updated_at:
+                raise HTTPException(
+                    status_code=409, detail="Document changed; reload before saving"
+                )
+            if request.is_compact_sheet and (
+                row["nap_year"] is None or _file_type(row["file_path"]) != "xlsx"
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Only an XLSX document with a NAP round can be a compact sheet",
+                )
+            stamp = datetime.now(timezone.utc).isoformat()
+            if request.is_compact_sheet:
+                connection.execute(
+                    "UPDATE document SET is_compact_sheet=0, updated_at=? "
+                    "WHERE dso_id=? AND nap_year=? AND is_compact_sheet=1 AND id<>?",
+                    (stamp, row["dso_id"], row["nap_year"], document_id),
+                )
+            connection.execute(
+                "UPDATE document SET is_compact_sheet=?, updated_at=? WHERE id=?",
+                (int(request.is_compact_sheet), stamp, document_id),
+            )
+        return {
+            "id": document_id,
+            "is_compact_sheet": request.is_compact_sheet,
+            "updated_at": stamp,
+        }
 
     @app.get("/api/overview/documents/{document_id}/pdf")
     def document_pdf(document_id: int) -> FileResponse:

@@ -108,6 +108,7 @@ type Document = {
   version: string | null
   source: string
   is_selected: number
+  is_compact_sheet: number
   is_downloaded: number
   file_type: string | null
   extract_count: number
@@ -144,6 +145,31 @@ function DocumentYearEditor({ item, onSaved }: { item: Document; onSaved: () => 
     <button type="button" disabled={saving} onClick={() => { setYear(item.year?.toString() || ''); setEditing(false) }}>{t("Cancel")}</button>
     {error && <small role="alert">{t(error)}</small>}
   </form>
+}
+
+function CompactSheetToggle({ item, onSaved }: { item: Document; onSaved: () => void }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  if (item.file_type !== 'xlsx' || item.year === null) return null
+  async function toggle() {
+    setSaving(true); setError('')
+    try {
+      const response = await fetch(`/api/overview/documents/${item.id}/compact-sheet`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_compact_sheet: !item.is_compact_sheet, expected_updated_at: item.updated_at }),
+      })
+      const result = await response.json() as { detail?: string }
+      if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : t("Could not save compact sheet"))
+      onSaved()
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Could not save compact sheet")) }
+    finally { setSaving(false) }
+  }
+  return <>
+    <button type="button" className="document-year-edit" aria-pressed={Boolean(item.is_compact_sheet)} disabled={saving} onClick={() => void toggle()}>
+      <FileText size={13} />{item.is_compact_sheet ? t("Compact sheet (click to unmark)") : t("Mark as compact sheet")}
+    </button>
+    {error && <small role="alert">{t(error)}</small>}
+  </>
 }
 
 type ExtractTable = {
@@ -582,6 +608,7 @@ function App() {
                       {Boolean(item.is_downloaded) && ['md', 'markdown', 'txt'].includes(item.file_type || '') && <a className="document-open-pdf" href={`/api/overview/documents/${item.id}/text`} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /> {t(" Open Markdown")}</a>}
                     </div>
                     <DocumentYearEditor item={item} onSaved={() => setDocumentRevision(value => value + 1)} />
+                    <CompactSheetToggle item={item} onSaved={() => setDocumentRevision(value => value + 1)} />
                   </div>
                 ))}
               </div>
