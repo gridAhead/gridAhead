@@ -61,3 +61,5 @@ explicit-preview-rules = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["network: calls live external services; run with `pytest -m network`"]
+addopts = "-m 'not network'"

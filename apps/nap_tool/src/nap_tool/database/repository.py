@@ -41,6 +41,7 @@ class Candidate:
         title: Original document name.
         source_url: PDF URL.
         version: Source version or validity date.
+        nap_year: NAP round stated by the source; inferred from title and version if None.
     """
 
     provider_slug: str
@@ -50,6 +51,7 @@ class Candidate:
     title: str
     source_url: str
     version: str | None = None
+    nap_year: int | None = None
 
 
 def store_candidates(database: Path, candidates: list[Candidate]) -> tuple[int, int]:
@@ -105,7 +107,9 @@ def store_candidates(database: Path, candidates: list[Candidate]) -> tuple[int, 
                     candidate.source,
                     version,
                     current_to,
-                    infer_nap_year(candidate.title, candidate.version),
+                    candidate.nap_year
+                    if candidate.nap_year is not None
+                    else infer_nap_year(candidate.title, candidate.version),
                     stamp,
                     stamp,
                 ),

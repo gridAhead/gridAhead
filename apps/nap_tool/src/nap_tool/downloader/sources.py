@@ -33,8 +33,8 @@ class NAPCandidate(TypedDict):
     document_id: str
     document_name: str
     source_url: str
-    current_from: int | None
-    current_to: int | None
+    version: str | None
+    nap_year: int | None
 
 
 class _LinkParser(HTMLParser):
@@ -230,64 +230,90 @@ def _configured_metadata(
     }
 
 
+# VNBdigital's own frontend loads grid expansion documents per provider with
+# vnb_gridExpansionDocumentsExternal; the `documents` field of vnb_vnbs no longer holds them.
+_PROVIDERS_QUERY = """
+query {
+  vnb_vnbs { _id name services { type { type } activated } }
+}
+"""
+_DOCUMENTS_QUERY = """
+query ($vnbId: ID!) {
+  vnb_gridExpansionDocumentsExternal(vnbId: $vnbId) {
+    _id url uploadDate
+    metadata { filename title type tag version publicationAt }
+  }
+}
+"""
+# Upload slot of the NAP report (PDF); the other slots are XLSX measure lists.
+NAP_REPORT_TYPE = "NETZAUSBAUPLAN"
+
+
 def _latest_vnbdigital_candidates(graphql_url: str) -> list[NAPCandidate]:
-    """Query VNBdigital and select its newest likely NAP per provider."""
-    payload = _graphql_request(graphql_url)
-    errors = payload.get("errors")
-    if errors:
-        raise RuntimeError(f"VNBdigital GraphQL returned errors: {errors}")
-    data = payload.get("data")
-    if not isinstance(data, dict) or not isinstance(data.get("vnb_vnbs"), list):
+    """Query VNBdigital and select the newest NAP report of every NAP provider.
+
+    Raises:
+        RuntimeError: If a request fails, or if providers offer the NAP service but
+            none of them has a NAP report, which means the API changed.
+    """
+    providers = _graphql_data(graphql_url, _PROVIDERS_QUERY).get("vnb_vnbs")
+    if not isinstance(providers, list):
         raise RuntimeError("VNBdigital GraphQL response has no vnb_vnbs list")
+    active = [item for item in providers if isinstance(item, dict) and _nap_service_active(item)]
 
     candidates: list[NAPCandidate] = []
-    for provider in data["vnb_vnbs"]:
-        if not isinstance(provider, dict) or not _nap_service_active(provider):
-            continue
+    for provider in active:
         provider_name = str(provider.get("name") or "")
         provider_id = str(provider.get("_id") or "")
         if not provider_name or not provider_id:
             continue
-        documents = _nap_documents(provider)
-        if not documents:
+        documents = _graphql_data(graphql_url, _DOCUMENTS_QUERY, {"vnbId": provider_id}).get(
+            "vnb_gridExpansionDocumentsExternal"
+        )
+        reports = [item for item in documents or [] if _is_nap_report(item)]
+        if not reports:
             continue
-        newest = max(documents, key=_document_score)
-        source_url = str(newest.get("url") or "")
-        if not source_url:
-            continue
-        current_from = newest.get("currentFrom")
-        current_to = newest.get("currentTo")
+        newest = max(reports, key=_report_score)
+        metadata = newest["metadata"]
+        published = metadata.get("publicationAt") or newest.get("uploadDate")
         candidates.append(
             {
                 "provider_name": provider_name,
                 "provider_slug": _provider_slug(provider_name),
                 "source_provider_id": provider_id,
-                "document_id": str(newest.get("_id") or provider_id),
-                "document_name": str(newest.get("name") or newest.get("title") or "NAP"),
-                "source_url": _with_preview(source_url),
-                "current_from": current_from if isinstance(current_from, int) else None,
-                "current_to": current_to if isinstance(current_to, int) else None,
+                "document_id": newest["_id"],
+                "document_name": str(metadata.get("filename") or metadata.get("title") or "NAP"),
+                "source_url": _with_preview(newest["url"]),
+                "version": _iso_timestamp(published) if isinstance(published, int) else None,
+                "nap_year": _nap_year(metadata),
             }
+        )
+    if active and not candidates:
+        raise RuntimeError(
+            f"VNBdigital lists {len(active)} providers with the NAP service but no NAP "
+            "report; its API may have changed"
         )
     return sorted(candidates, key=lambda item: item["provider_slug"])
 
 
-def _graphql_request(graphql_url: str) -> dict[str, object]:
-    query = """
-    query {
-      vnb_vnbs {
-        _id name
-        services { type { type } activated }
-        documents {
-          _id name title category url currentFrom currentTo
-          attachments { _id name title category url }
-        }
-      }
-    }
-    """
+def _graphql_data(
+    graphql_url: str, query: str, variables: dict[str, object] | None = None
+) -> dict[str, object]:
+    payload = _graphql_request(graphql_url, query, variables)
+    if payload.get("errors"):
+        raise RuntimeError(f"VNBdigital GraphQL returned errors: {payload['errors']}")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise RuntimeError("VNBdigital GraphQL response has no data")
+    return data
+
+
+def _graphql_request(
+    graphql_url: str, query: str, variables: dict[str, object] | None = None
+) -> dict[str, object]:
     request = Request(
         graphql_url,
-        data=json.dumps({"query": query}).encode("utf-8"),
+        data=json.dumps({"query": query, "variables": variables or {}}).encode("utf-8"),
         headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
     )
     try:
@@ -313,59 +339,39 @@ def _nap_service_active(provider: dict[str, object]) -> bool:
     )
 
 
-def _nap_documents(provider: dict[str, object]) -> list[dict[str, object]]:
-    documents = provider.get("documents")
-    if not isinstance(documents, list):
-        return []
-    candidates: list[dict[str, object]] = []
-    for document in documents:
-        if not isinstance(document, dict):
-            continue
-        if _looks_like_nap(document):
-            candidates.append(document)
-        attachments = document.get("attachments")
-        if isinstance(attachments, list):
-            for attachment in attachments:
-                if isinstance(attachment, dict) and _looks_like_nap(attachment):
-                    candidates.append(
-                        {
-                            **attachment,
-                            "currentFrom": document.get("currentFrom"),
-                            "currentTo": document.get("currentTo"),
-                        }
-                    )
-    return [candidate for candidate in candidates if candidate.get("url")]
-
-
-def _looks_like_nap(document: dict[str, object]) -> bool:
-    text = " ".join(
-        str(document.get(key) or "") for key in ("name", "title", "category", "url")
-    ).casefold()
-    return any(
-        marker in text
-        for marker in ("netzausbau", "netzausbauplan", "netzausbaubericht", "14d", "nap")
+def _is_nap_report(document: object) -> bool:
+    return (
+        isinstance(document, dict)
+        and isinstance(document.get("_id"), str)
+        and isinstance(document.get("url"), str)
+        and bool(document["url"])
+        and isinstance(document.get("metadata"), dict)
+        and document["metadata"].get("type") == NAP_REPORT_TYPE
     )
 
 
-def _document_score(document: dict[str, object]) -> tuple[int, int, str]:
-    name = str(document.get("name") or document.get("title") or "").casefold()
-    current_from = document.get("currentFrom")
-    timestamp = current_from if isinstance(current_from, int) else 0
-    preference = 0
-    for marker, points in (
-        ("aktualisiert", 90),
-        ("angepasst", 80),
-        ("aktuell", 40),
-        ("final", 20),
-        ("erstfassung", -15),
-        ("anlage", -90),
-        ("netzkarte", -120),
-        ("ungueltig", -1000),
-        ("ungültig", -1000),
-    ):
-        if marker in name:
-            preference += points
-    return timestamp, preference, name
+def _report_score(document: dict[str, object]) -> tuple[int, bool, bool, int]:
+    """Rank reports: newest round, then not marked invalid, then FINAL, then newest upload."""
+    metadata = document["metadata"]
+    name = f"{metadata.get('filename') or ''} {metadata.get('title') or ''}".casefold()
+    valid = not any(marker in name for marker in ("ungültig", "ungueltig"))
+    uploaded = document.get("uploadDate")
+    return (
+        _nap_year(metadata) or 0,
+        valid,
+        metadata.get("version") == "FINAL",
+        uploaded if isinstance(uploaded, int) else 0,
+    )
+
+
+def _nap_year(metadata: dict[str, object]) -> int | None:
+    """Read the NAP round from a tag such as `Netzausbauplan_2026`."""
+    match = re.fullmatch(r"Netzausbauplan_(20\d{2})", str(metadata.get("tag") or ""))
+    return int(match.group(1)) if match else None
+
+
+def _iso_timestamp(milliseconds: int) -> str:
+    return datetime.fromtimestamp(milliseconds / 1000, UTC).isoformat()
 
 
 def _with_preview(url: str) -> str:

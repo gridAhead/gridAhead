@@ -31,13 +31,15 @@ uv sync --extra docling --python cpython-3.12-windows-x86_64-none
 Later `uv sync` and `uv run` calls keep using that x64 environment. Docling
 runs slower under emulation; WSL with Linux ARM wheels is the faster option.
 
-Run commands via `uv run`:
+Run commands via `uv run`. They read and write the nap_data repository set in
+`NAP_DATA_DIR` (see `.env.example`):
 
 ```bash
-uv run nap-tool download
+uv run nap-tool discover      # register the NAP reports VNBdigital publishes
+uv run nap-tool download      # fetch the PDFs of registered documents
 uv run nap-tool extract --tool docling
 uv run nap-tool extract --tool llmPDF
-uv run nap-tool compare
+uv run nap-tool ui            # review tables in the browser
 ```
 
 ## Folder layout
@@ -45,26 +47,16 @@ uv run nap-tool compare
 ```
 config/providers.yaml       # VNBdigital endpoint and exceptional provider sources
 
-data/                       # gitignored; not committed
-  raw/<slug>/
-    metadata.json           # source URL, document ID, timestamp, SHA-256
-    nap.pdf                 # newest VNBdigital NAP (stable filename)
-    <original_filename>.csv
-  processed/
-    extracted/<slug>/
-      docling/
-        nap_table_<n>.csv   # Docling's raw table output
-        metadata.json       # source page, table number, regions, dimensions
-      llamaparse/
-        nap_table_<n>.csv   # optional LlamaParse Agentic output
-        metadata.json
-      llmPDF/
-        nap_table_<n>.csv   # normalized llmPDF table output
-        metadata.json
-        result/nap/         # native llmPDF output used by the Review UI
-    compared/<slug>/
-      nap_table_<n>.csv     # table accepted in the comparator
-      metadata.json         # selected tool, merge and manual-edit provenance
+$NAP_DATA_DIR/              # separate nap_data repository; see its README
+  nap_tool.sqlite           # metadata, selections, review status; no PDF/CSV BLOBs
+  pdf/<slug>/<hash>.pdf     # downloaded source PDFs, named by content hash
+  documents/<slug>/         # non-PDF source documents (XLSX, Markdown)
+  extracted/<slug>/         # extraction CSVs per PDF, tool and run
+  extract_reviewed/         # reviewed extraction CSVs
+  cleaned/                  # cleaning output CSVs and cell metadata
+  clean_reviewed/           # reviewed cleaning CSVs
+  harmonized/               # harmonized tables per set and scheme
+  scripts/                  # snapshots of extraction configs and cleaning code
 
 src/nap_tool/
   cli.py                    # typer app; registers one subcommand per module
@@ -83,12 +75,14 @@ src/nap_tool/
   comparator/                # bridge to the packaged llmPDF Review UI
 ```
 
-`download` discovers every currently published VNBdigital NAP and writes its
-newest document as `data/raw/<provider>/nap.pdf`, overwriting the prior
-download — there's no version history. `metadata.json` records the source,
-document ID, timestamp, byte count, and SHA-256. Extraction output remains
-tool-specific and unchanged by review. Only tables approved in llmPDF Review
-are written to `processed/compared`.
+`discover` asks VNBdigital for each DSO's grid expansion documents and
+registers the newest NAP report per DSO in `nap_tool.sqlite`, without
+downloading it. It reports how many documents it found and how many are new; a
+registered document counts as known from then on, even before its PDF is
+downloaded. `download` fetches the PDFs of registered documents that have none
+yet and stores each as `pdf/<slug>/<hash>.pdf`. Stored files are never
+overwritten, and the `document` table keeps every version. Extraction output
+remains tool-specific and unchanged by review.
 
 ## Table type settings
 
@@ -199,8 +193,10 @@ erDiagram
 `run` is one `download` invocation; `document` keeps full history — a new row
 per download, never overwritten. `table_extracted` and `table_compared` stay
 overwrite-in-place (upsert on document/extractor and on comparator output),
-no history kept for those two. `current_from`/`current_to` is VNBdigital's
-own validity window, not a publication date. `pages_json`/`regions_json`
+no history kept for those two. `current_from`/`current_to` was VNBdigital's
+own validity window; VNBdigital no longer provides one, so `discover` now
+stores the publication date (or the upload date when that is missing) as the
+version and leaves `current_to` empty. `pages_json`/`regions_json`
 hold per-page numbers and bounding boxes as JSON text rather than child
 tables. Failed extraction attempts are not persisted — only successful
 `table_extracted` rows exist in the DB.
@@ -246,25 +242,20 @@ uv run nap-tool extract --tool llmPDF
 uv run nap-tool extract --tool llmPDF --dso avacon-netz-gmbh --pages 1,3-5
 ```
 
-The source PDF remains at `data/raw/<slug>/nap.pdf` and is read without being
-copied or modified. The native llmPDF result is retained below
-`data/processed/extracted/<slug>/llmPDF/result/nap/` for review and resumable
-processing.
+The source PDF is read from `pdf/<slug>/` after its SHA-256 is checked against
+the database; it is never modified. Extraction CSVs are stored below
+`extracted/<slug>/`, and llmPDF's native result is kept beside them in
+`native/`.
 
-## Compare and accept tables
+## Review tables
 
 ```bash
-uv run nap-tool compare
+uv run nap-tool ui
 ```
 
-The command launches the documented `llmpdf review` CLI shipped by llmPDF. It displays `nap.pdf`
-beside the generated Markdown and compares llmPDF tables with their retained
-Docling source tables. Reviewers can approve, ignore, annotate, and edit tables.
-Publishing writes approved tables to `data/processed/compared/<slug>/` using
-the existing `nap_table_<n>.csv` and comparison metadata contract. The
-normalized extraction CSVs under `processed/extracted` remain unchanged. The
-comparison metadata also records whether the final llmPDF source was `ai`,
-`docling`, or `custom`.
+The command opens the overview at `http://127.0.0.1:8000/ui/overview`.
+Reviewed extraction CSVs are written to `extract_reviewed/`; the automatic CSVs
+under `extracted/` remain unchanged.
 
 ## Add a DSO source
 
@@ -275,19 +266,20 @@ there or needs a special direct URL:
 ```yaml
 providers:
   - name: "New Grid Co"
-    slug: "new-grid-co"          # used as the folder name under data/
+    slug: "new-grid-co"          # used in nap_data paths, e.g. pdf/<slug>/
     source_type: hub              # hub | custom | manual
     hub_match: "New Grid Co"      # link text on the hub page (source_type: hub only)
     # url: "https://..."          # direct download URL (source_type: custom only)
     # note: "..."                 # free-text, e.g. why this is manual
 ```
 
-Downloaded VNBdigital PDFs use the stable path `data/raw/<slug>/nap.pdf`.
-Original document names remain available in downloader and extraction metadata.
+Downloaded PDFs are stored as `pdf/<slug>/<hash>.pdf`; the original document
+name stays in `document.title`.
 
 To update just one VNBdigital DSO, use its generated slug:
 
 ```bash
+uv run nap-tool discover --dso westnetz-gmbh
 uv run nap-tool download --dso westnetz-gmbh
 ```
 
@@ -366,7 +358,7 @@ tables. Changing a Set’s filters invalidates its generated outputs.
 ## Data version
 
 `nap_tool.sqlite` carries the nap_data format version in `PRAGMA user_version`;
-this nap_tool expects `DB_VERSION = 20` (`src/nap_tool/database/schema.py`). Every
+this nap_tool expects `DB_VERSION = 21` (`src/nap_tool/database/schema.py`). Every
 database open refuses another version and says whether to update nap_tool or
 nap_data, and `nap-tool ui` prints the version on startup. `connect()` creates the
 schema in an empty file and never upgrades; there is no upgrade path from earlier

@@ -14,58 +14,142 @@ import pytest
 from nap_tool.config import HubConfig, Provider, SourceType, VnbDigitalConfig
 from nap_tool.downloader import sources
 
+GRAPHQL_URL = "https://example.test/graphql"
+WSW = "wsw"
 
-def test_latest_vnbdigital_candidates_selects_the_current_document(monkeypatch) -> None:
-    """The most recent plan is selected for every active VNBdigital provider."""
-    payload = {
-        "data": {
-            "vnb_vnbs": [
-                {
-                    "_id": "provider-1",
-                    "name": "Müller Netz GmbH",
-                    "services": [{"type": {"type": "nap"}, "activated": True}],
-                    "documents": [
-                        {
-                            "_id": "old",
-                            "name": "Netzausbauplan 2024",
-                            "url": "https://example.test/files?fileId=old",
-                            "currentFrom": 1,
-                            "attachments": [],
-                        },
-                        {
-                            "_id": "new",
-                            "name": "Netzausbauplan 2025 aktualisiert",
-                            "url": "https://example.test/files?fileId=new",
-                            "currentFrom": 2,
-                            "attachments": [],
-                        },
-                    ],
-                },
-                {
-                    "_id": "inactive",
-                    "name": "Inactive Grid",
-                    "services": [{"type": {"type": "nap"}, "activated": False}],
-                    "documents": [],
-                },
-            ]
-        }
+
+def _report(document_id, tag, version, uploaded, filename, kind="NETZAUSBAUPLAN"):
+    return {
+        "_id": document_id,
+        "url": f"https://www.vnbdigital.de/gateway/files?serviceName=vnb&fileId={document_id}",
+        "uploadDate": uploaded,
+        "metadata": {
+            "filename": filename,
+            "title": f"Netzausbauplan_WSW_Netz_GmbH_{tag[-4:]}",
+            "type": kind,
+            "tag": tag,
+            "version": version,
+            "publicationAt": None,
+        },
     }
-    monkeypatch.setattr(sources, "_graphql_request", lambda _url: payload)
 
-    candidates = sources._latest_vnbdigital_candidates("https://example.test/graphql")
+
+# Trimmed from VNBdigital responses of 2026-11-10 (WSW Netz GmbH), provider ids replaced.
+WSW_DOCUMENTS = [
+    _report(
+        "6aee326c8834460c54fece66",
+        "Netzausbauplan_2026",
+        "DRAFT",
+        1793995320000,
+        "WSW-Netz-S-178_Bericht_nach_14d_EnWG_202610.31_Rev1-0_Abgabe.pdf",
+    ),
+    # An XLSX slot uploaded after the report must not replace it.
+    _report(
+        "6aee3a1f8834460c54fece70",
+        "Netzausbauplan_2026",
+        "DRAFT",
+        1794043800000,
+        "WSW_Massnahmen_2026.xlsx",
+        kind="NETZAUSBAUPLAN_MASSNAHMEN",
+    ),
+    _report(
+        "66f1329dca60bbdfaa229f72",
+        "Netzausbauplan_2024",
+        "FINAL",
+        1727083140000,
+        "WSW-Netz-S-178_Bericht_nach_§14d_EnWG_20240917_Rev1-3.pdf",
+    ),
+]
+
+
+def _portal(providers, documents):
+    """Stand in for VNBdigital: the provider list, then the documents of one provider."""
+    calls = []
+
+    def request(_url, _query, variables=None):
+        calls.append(variables)
+        if variables is None:
+            return {"data": {"vnb_vnbs": providers}}
+        return {
+            "data": {"vnb_gridExpansionDocumentsExternal": documents.get(variables["vnbId"], [])}
+        }
+
+    return request, calls
+
+
+def _provider(provider_id, name, nap_active=True):
+    return {
+        "_id": provider_id,
+        "name": name,
+        "services": [{"type": {"type": "nap"}, "activated": nap_active}],
+    }
+
+
+def test_latest_vnbdigital_candidates_selects_the_newest_report(monkeypatch) -> None:
+    """Each NAP provider yields its newest NAP report; XLSX slots and inactive providers don't."""
+    providers = [
+        _provider(WSW, "WSW Netz GmbH"),
+        _provider("empty", "Gemeindewerke Wadgassen GmbH"),
+        _provider("inactive", "Inactive Grid", nap_active=False),
+    ]
+    request, calls = _portal(providers, {WSW: WSW_DOCUMENTS})
+    monkeypatch.setattr(sources, "_graphql_request", request)
+
+    candidates = sources._latest_vnbdigital_candidates(GRAPHQL_URL)
 
     assert candidates == [
         {
-            "provider_name": "Müller Netz GmbH",
-            "provider_slug": "mueller-netz-gmbh",
-            "source_provider_id": "provider-1",
-            "document_id": "new",
-            "document_name": "Netzausbauplan 2025 aktualisiert",
-            "source_url": "https://example.test/files?fileId=new&serviceName=vnb&preview=1",
-            "current_from": 2,
-            "current_to": None,
+            "provider_name": "WSW Netz GmbH",
+            "provider_slug": "wsw-netz-gmbh",
+            "source_provider_id": WSW,
+            "document_id": "6aee326c8834460c54fece66",
+            "document_name": "WSW-Netz-S-178_Bericht_nach_14d_EnWG_202610.31_Rev1-0_Abgabe.pdf",
+            "source_url": "https://www.vnbdigital.de/gateway/files?serviceName=vnb"
+            "&fileId=6aee326c8834460c54fece66&preview=1",
+            "version": "2026-11-06T20:02:00+00:00",
+            "nap_year": 2026,
         }
     ]
+    assert calls == [None, {"vnbId": WSW}, {"vnbId": "empty"}]
+
+
+def test_report_ranking_within_a_round(monkeypatch) -> None:
+    """Within a round, a report marked invalid loses, then FINAL beats DRAFT despite age."""
+    documents = [
+        _report("draft", "Netzausbauplan_2024", "DRAFT", 1715007240000, "NAP_2024.pdf"),
+        _report("final", "Netzausbauplan_2024", "FINAL", 1714485600000, "NAP_2024_final.pdf"),
+        _report("invalid", "Netzausbauplan_2024", "FINAL", 1727769600000, "NAP_2024_ungültig.pdf"),
+    ]
+    request, _ = _portal([_provider(WSW, "WSW Netz GmbH")], {WSW: documents})
+    monkeypatch.setattr(sources, "_graphql_request", request)
+
+    [candidate] = sources._latest_vnbdigital_candidates(GRAPHQL_URL)
+
+    assert candidate["document_id"] == "final"
+    assert candidate["nap_year"] == 2024
+
+
+def test_nap_providers_without_any_report_fail_loudly(monkeypatch) -> None:
+    """Providers offering the NAP service but no report anywhere means the API changed."""
+    request, _ = _portal([_provider(WSW, "WSW Netz GmbH")], {})
+    monkeypatch.setattr(sources, "_graphql_request", request)
+
+    with pytest.raises(RuntimeError, match="API may have changed"):
+        sources._latest_vnbdigital_candidates(GRAPHQL_URL)
+
+
+def test_graphql_errors_stop_discovery(monkeypatch) -> None:
+    """An error in a per-provider document query is reported, not skipped."""
+
+    def request(_url, _query, variables=None):
+        if variables is None:
+            return {"data": {"vnb_vnbs": [_provider(WSW, "WSW Netz GmbH")]}}
+        return {"errors": [{"message": "Cannot query field"}]}
+
+    monkeypatch.setattr(sources, "_graphql_request", request)
+
+    with pytest.raises(RuntimeError, match="returned errors"):
+        sources._latest_vnbdigital_candidates(GRAPHQL_URL)
 
 
 def test_discover_vnbdigital_returns_candidates_without_downloading(monkeypatch) -> None:
@@ -77,8 +161,8 @@ def test_discover_vnbdigital_returns_candidates_without_downloading(monkeypatch)
         "document_id": "document-1",
         "document_name": "NAP 2025",
         "source_url": "https://example.test/nap.pdf",
-        "current_from": 123,
-        "current_to": None,
+        "version": None,
+        "nap_year": 2025,
     }
     monkeypatch.setattr(sources, "_latest_vnbdigital_candidates", lambda _url: [candidate])
     monkeypatch.setattr(
@@ -88,6 +172,16 @@ def test_discover_vnbdigital_returns_candidates_without_downloading(monkeypatch)
     )
 
     assert sources.discover_vnbdigital(VnbDigitalConfig()) == [candidate]
+
+
+@pytest.mark.network
+def test_live_portal_still_lists_nap_reports() -> None:
+    """Calls the real VNBdigital portal (about 100 requests); run with `pytest -m network`."""
+    candidates = sources.discover_vnbdigital(VnbDigitalConfig())
+
+    assert candidates
+    assert all(item["nap_year"] for item in candidates)
+    assert all("fileId=" in item["source_url"] for item in candidates)
 
 
 def test_download_vnbdigital_pdf_validates_bytes(monkeypatch) -> None:
