@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: What gridAhead is setting out to do, why grid expansion plans are hard to use today, and what the project is building.
+description: The repository, and what nap-tool does with the grid expansion plans published on VNBdigital.
 sidebar:
     label: Introduction
     order: 0
@@ -8,20 +8,27 @@ sidebar:
 
 import Credits from "../../components/Credits.astro";
 
-Distribution grid operators in Germany are required [by law](https://www.gesetze-im-internet.de/enwg_2005/__14d.html) to publish grid expansions plans every two years.
-This usually means they publish PDFs with unstructured or semi-structured data. gridAhead plans to collect, maintain and publish
-- data pipelines 
-- consolidated data results
+gridAhead currently containts code for managing data extractions of grid expansion plans (Netzausbaupläne) that German distribution system operators publish on [VNBdigital](https://www.vnbdigital.de/). 
+The project's goal is to turn grid expansion plans into data (see our [our announcement post](/blog/2026-11-17-introducing-gridahead)).
 
-so the public can more easily make use of those already-published plans.
+## What is in the repository today
 
-## Current state of the project
+Two apps:
 
-This repository is currently being constructed, as the first modules are being added.
-We currently do not publish any data.
+- `apps/docs` is this site.
+- [`/apps/nap-tool`](/docs/nap-tool) is the only package that processes plans. It is a Python 3.12 command-line tool, `nap-tool`, and a review UI. 
 
-## Who is behind it
+We currently do not release any data ourselves, and only pipelines. This is because there are ongoing issues with the released plan's licenses.
 
-gridAhead is a cooperation of the [Reiner Lemoine Institute](https://reiner-lemoine-institut.de/) and [Goal100](https://goal100.org/). See our [announcement post](/blog/2026-11-15-introducing-gridahead) for more info and background.
+## Running it
+
+The repository needs Node.js 24+, [pnpm](https://pnpm.io/), and [uv](https://docs.astral.sh/uv/).
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Install nap-tool from `apps/nap_tool` with `uv sync`. The extraction backends are extras: `docling`, `llmpdf`, and `llamaparse`. For live work on the review UI, run `pnpm --filter nap-tool-ui dev:ui` next to `pnpm dev` and open the Vite URL.
 
 <Credits />

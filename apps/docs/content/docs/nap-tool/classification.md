@@ -1,3 +1,12 @@
+---
+title: Classification
+description: How nap-tool classifies a harmonized grid-measure table, which rows it drops, and which columns it derives.
+mode: wide
+sidebar:
+  label: Classification
+  order: 1
+---
+
 <!--
 SPDX-FileCopyrightText: 2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut
 SPDX-FileCopyrightText: 2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut
@@ -5,8 +14,6 @@ SPDX-FileCopyrightText: 2026 Chenyan Ye <https://github.com/yechenyan> © Reiner
 
 SPDX-License-Identifier: Apache-2.0
 -->
-
-# Classification
 
 `uv run nap-tool classify --scheme-id <id> [--set-id <id>]` (or **Run classification** in
 the UI) reads the harmonized table of a grid-measure set and writes a new generation

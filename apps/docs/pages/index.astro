@@ -22,7 +22,7 @@ const { config } = data;
   ogEnabled={config.og.enabled}
   structuredDataEnabled={config.structuredData}
   page={{
-    title: "gridAhead — Grid expansion plans, on a map",
+    title: "gridAhead — Turning grid plans into data",
     description: config.description,
     route: "/",
   }}
@@ -35,15 +35,15 @@ const { config } = data;
       <h1
         class="mt-6 mb-0 max-w-3xl text-balance font-medium text-4xl leading-none sm:text-5xl lg:text-6xl"
       >
-        <span class="block">Grid expansion plans,</span>
-        <span class="block">geocoded and mapped.</span>
-        <span class="block text-muted-foreground">Open to the public.</span>
+        <span class="block">Turning grid plans</span>
+        <span class="block">into data.</span>
+        <span class="block text-muted-foreground">Open and georeferenced.</span>
       </h1>
       <p class="mt-8 mb-0 max-w-xl text-pretty text-lg text-muted-foreground">
-        Larger German distribution system operators publish their grid
-        expansion plans every two years. The documents exist, just not in a
-        form anyone can work with. gridAhead geocodes and georeferences them
-        so the public can use them.
+        Since the end of October, Germany's larger distribution system
+        operators have published a second round of grid expansion plans, more
+        than 33,000 measures. The data is still hard to use. gridAhead turns
+        those published plans into open, georeferenced datasets.
       </p>
       <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
         <a
@@ -55,7 +55,7 @@ const { config } = data;
         </a>
         <a
           class="inline-flex items-center gap-1 font-medium text-accent text-sm hover:text-foreground"
-          href="/blog/2026-11-15-introducing-gridahead"
+          href="/blog/2026-11-17-introducing-gridahead"
         >
           Our announcement
           <Chevron />
@@ -82,35 +82,38 @@ const { config } = data;
   <section class="border-border border-t">
     <div class="mx-auto max-w-[1400px] px-6 py-20 sm:py-28">
       <h2 class="mt-0 mb-0 max-w-3xl font-medium text-3xl leading-none sm:text-4xl">
-        <span class="block">Published every two years.</span>
-        <span class="block text-muted-foreground">Still barely usable as data.</span>
+        <span class="block">Over 33,000 measures.</span>
+        <span class="block text-muted-foreground">Still hard to use as data.</span>
       </h2>
       <p class="mt-8 mb-0 max-w-xl text-pretty text-lg text-muted-foreground">
-        Grid expansion decides where the energy transition becomes practical.
-        The plans that describe it are public. They follow no modern data
-        standard, and broad demands on the Federal Network Agency have not
-        changed that.
+        New wind and solar plants, storage, heat pumps, and charging points
+        can connect only as fast as the distribution grid is reinforced. The
+        plans for that work are public. Places, coordinates, and open licences
+        are mostly still missing.
       </p>
       <dl class="mt-16 grid gap-12 md:grid-cols-3 md:gap-8">
         <div class="border-border border-t pt-5">
+          <dt class="font-medium text-xl">Second round, 2026</dt>
+          <dd class="mt-2 mb-0 text-muted-foreground leading-relaxed">
+            80 of 85 operators have published measures. About 20,000 of the
+            more than 33,000 are ongoing or planned. Where they are is still
+            generally unclear.
+          </dd>
+        </div>
+        <div class="border-border border-t pt-5">
+          <dt class="font-medium text-xl">Spreadsheets, not maps</dt>
+          <dd class="mt-2 mb-0 text-muted-foreground leading-relaxed">
+            Most operators now use a common spreadsheet format. The 2024 round
+            was PDF only. Measures still have no coordinates, and the grid
+            maps are still images in the reports.
+          </dd>
+        </div>
+        <div class="border-border border-t pt-5">
           <dt class="font-medium text-xl">Every two years</dt>
           <dd class="mt-2 mb-0 text-muted-foreground leading-relaxed">
-            Larger distribution system operators have to publish their grid
-            expansion plans on this cycle.
-          </dd>
-        </div>
-        <div class="border-border border-t pt-5">
-          <dt class="font-medium text-xl">No data standard</dt>
-          <dd class="mt-2 mb-0 text-muted-foreground leading-relaxed">
-            The publications cannot readily be reused, compared, or placed on
-            a map.
-          </dd>
-        </div>
-        <div class="border-border border-t pt-5">
-          <dt class="font-medium text-xl">Public interest</dt>
-          <dd class="mt-2 mb-0 text-muted-foreground leading-relaxed">
-            Investment, research, and policy debates need the same facts,
-            spatially and traceably.
+            Operators with 100,000 or more customers, and smaller ones with
+            significant wind or solar curtailment, must publish a plan on
+            VNBdigital under §§ 14d and 14e EnWG.
           </dd>
         </div>
       </dl>
@@ -120,32 +123,56 @@ const { config } = data;
   <section class="border-border border-t">
     <div class="mx-auto max-w-[1400px] px-6 py-20 sm:py-28">
       <h2 class="mt-0 mb-0 max-w-3xl font-medium text-3xl leading-none sm:text-4xl">
-        <span class="block">From documents to places.</span>
+        <span class="block">From published plans to open data.</span>
         <span class="block text-muted-foreground">What gridAhead is building.</span>
       </h2>
-      <ol class="mt-16 grid list-none gap-px overflow-hidden rounded-2xl border border-border bg-border p-0 md:grid-cols-3">
+      <ol class="mt-16 grid list-none gap-px overflow-hidden rounded-2xl border border-border bg-border p-0 md:grid-cols-2">
         <li class="bg-background px-6 py-8">
           <p class="m-0 font-mono text-muted-foreground text-xs">01</p>
-          <h3 class="mt-4 mb-0 font-medium text-xl">Geocode</h3>
+          <h3 class="mt-4 mb-0 font-medium text-xl">Geocode planned measures</h3>
           <p class="mt-3 mb-0 text-muted-foreground leading-relaxed">
-            Bind places and measures in the plans PDF's to coordinates.
+            Locate announced measures from the 2024 and 2026 plans, so it is
+            clear where and when the grid near a site will be reinforced.
           </p>
         </li>
         <li class="bg-background px-6 py-8">
           <p class="m-0 font-mono text-muted-foreground text-xs">02</p>
-          <h3 class="mt-4 mb-0 font-medium text-xl">Georeference</h3>
+          <h3 class="mt-4 mb-0 font-medium text-xl">Georeference grid maps</h3>
           <p class="mt-3 mb-0 text-muted-foreground leading-relaxed">
-            Create the most comprehensive public data of current and future medium voltage grids in Germany.
+            Digitize the maps in the plans and enrich them with other public
+            data. Studies can then use real medium-voltage topologies instead
+            of synthetic model grids.
           </p>
         </li>
         <li class="bg-background px-6 py-8">
           <p class="m-0 font-mono text-muted-foreground text-xs">03</p>
           <h3 class="mt-4 mb-0 font-medium text-xl">Make it accessible</h3>
           <p class="mt-3 mb-0 text-muted-foreground leading-relaxed">
-            Publish the result so others can keep working with it.
+            Publish results under open licences whenever possible, so others
+            can reuse one versioned dataset instead of starting from the
+            original documents again.
+          </p>
+        </li>
+        <li class="bg-background px-6 py-8">
+          <p class="m-0 font-mono text-muted-foreground text-xs">04</p>
+          <h3 class="mt-4 mb-0 font-medium text-xl">Build a community</h3>
+          <p class="mt-3 mb-0 text-muted-foreground leading-relaxed">
+            An open community that uses, reviews, and develops the data and
+            the methods.
+            <a
+              class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+              href="https://github.com/gridahead/gridahead"
+            >
+              Help on GitHub.
+            </a>
           </p>
         </li>
       </ol>
+      <p class="mt-10 mb-0 max-w-xl text-muted-foreground leading-relaxed">
+        Making these plans easier to use does not conflict with the protection
+        of critical infrastructure. gridAhead works only with information
+        distribution system operators have already published.
+      </p>
     </div>
   </section>
 
@@ -183,7 +210,14 @@ const { config } = data;
         </a>
       </div>
       <div class="mt-16 border-border border-t pt-10">
-        <p class="m-0 text-muted-foreground text-xs">Co-funded by</p>
+        <p class="m-0 text-muted-foreground text-xs">Funded by</p>
+        <p class="mt-4 mb-0 max-w-xl text-muted-foreground leading-relaxed">
+          Goal100's initiative for gridAhead is jointly funded by Google.org
+          and the Veolia Stiftung, and hosted by <a
+            class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+            href="https://projecttogether.org/"
+          >ProjectTogether</a>.
+        </p>
         <div class="mt-6 flex flex-wrap items-start gap-x-12 gap-y-8">
           <Logo
             alt="Veolia Stiftung"
