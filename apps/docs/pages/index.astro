@@ -66,122 +66,14 @@ const { config } = data;
     <div class="mx-auto mt-16 max-w-[1400px] px-6 sm:mt-20">
       <div class="hero-bloom overflow-hidden rounded-[28px] px-3 pt-8 sm:px-16 sm:pt-16">
         <figure class="preview-window m-0 overflow-hidden rounded-t-2xl bg-background">
-          <figcaption class="sr-only">
-            A schematic of an existing grid and a planned expansion. Not a
-            network plan.
-          </figcaption>
-          <div class="grid h-[420px] sm:h-[520px] sm:grid-cols-[220px_minmax(0,1fr)]">
-            <aside class="hidden border-border border-r px-4 py-5 sm:block">
-              <ul class="mt-3 list-none p-0 text-sm">
-                <li class="flex items-center gap-2 py-1.5">
-                  <span class="inline-block h-px w-4 bg-foreground/70"></span>
-                  Existing grid
-                </li>
-                <li class="flex items-center gap-2 py-1.5 text-accent">
-                  <span class="inline-block h-px w-4 border-accent border-t border-dashed"></span>
-                  Planned expansion
-                </li>
-              </ul>
-            </aside>
-            <div class="map-pane min-h-0 p-4 text-foreground sm:p-8">
-              <svg
-                aria-hidden="true"
-                class="h-full w-full"
-                fill="none"
-                viewBox="24 40 560 350"
-              >
-                <path
-                  d="M48 64H220V176H404"
-                  stroke="currentColor"
-                  stroke-opacity="0.72"
-                  stroke-width="1.6"
-                />
-                <path
-                  d="M220 176V308H112"
-                  stroke="currentColor"
-                  stroke-opacity="0.4"
-                  stroke-width="1.6"
-                />
-                <path
-                  d="M404 176V96H548"
-                  stroke="currentColor"
-                  stroke-opacity="0.4"
-                  stroke-width="1.6"
-                />
-                <path
-                  d="M328 176V260H452"
-                  stroke="currentColor"
-                  stroke-opacity="0.4"
-                  stroke-width="1.6"
-                />
-                <path
-                  class="text-accent"
-                  d="M404 176H536V292"
-                  stroke="currentColor"
-                  stroke-dasharray="5 5"
-                  stroke-width="1.6"
-                />
-                <path
-                  class="text-accent"
-                  d="M220 308H372V372"
-                  stroke="currentColor"
-                  stroke-dasharray="5 5"
-                  stroke-width="1.6"
-                />
-                <rect
-                  class="text-accent"
-                  height="20"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                  width="20"
-                  x="38"
-                  y="54"
-                />
-                <circle
-                  cx="220"
-                  cy="176"
-                  r="5"
-                  stroke="currentColor"
-                  stroke-opacity="0.85"
-                  stroke-width="1.6"
-                />
-                <circle
-                  cx="404"
-                  cy="176"
-                  r="5"
-                  stroke="currentColor"
-                  stroke-opacity="0.85"
-                  stroke-width="1.6"
-                />
-                <circle
-                  cx="112"
-                  cy="308"
-                  r="4"
-                  stroke="currentColor"
-                  stroke-opacity="0.5"
-                  stroke-width="1.6"
-                />
-                <circle
-                  cx="548"
-                  cy="96"
-                  r="4"
-                  stroke="currentColor"
-                  stroke-opacity="0.5"
-                  stroke-width="1.6"
-                />
-                <circle
-                  cx="452"
-                  cy="260"
-                  r="4"
-                  stroke="currentColor"
-                  stroke-opacity="0.5"
-                  stroke-width="1.6"
-                />
-                <circle class="text-accent" cx="536" cy="292" fill="currentColor" r="5" />
-                <circle class="text-accent" cx="372" cy="372" fill="currentColor" r="5" />
-              </svg>
-            </div>
-          </div>
+          <img
+            alt="Stylized map of Germany: hexagons shaded by the density of grid expansion measures, overlaid with a schematic grid of existing and planned lines and substations."
+            class="block h-auto w-full"
+            decoding="async"
+            height="727"
+            src="/images/landing-map.png"
+            width="1600"
+          />
         </figure>
       </div>
     </div>
@@ -307,17 +199,23 @@ const { config } = data;
 </PageLayout>
 
 <style>
+  /* gridAhead logo green */
+  .hero-bloom,
+  .preview-window {
+    --ga-green: #00c46a;
+  }
+
   .hero-bloom {
-    background-color: color-mix(in oklab, var(--blume-accent) 12%, var(--blume-background));
+    background-color: color-mix(in oklab, var(--ga-green) 12%, var(--blume-background));
     background-image:
       radial-gradient(
         70% 60% at 50% 100%,
-        color-mix(in oklab, var(--blume-accent) 72%, transparent),
+        color-mix(in oklab, var(--ga-green) 72%, transparent),
         transparent 75%
       ),
       radial-gradient(
         120% 90% at 50% 100%,
-        color-mix(in oklab, var(--blume-accent) 32%, transparent),
+        color-mix(in oklab, var(--ga-green) 32%, transparent),
         transparent 80%
       );
   }
@@ -325,21 +223,6 @@ const { config } = data;
   .preview-window {
     box-shadow:
       0 0 0 1px color-mix(in oklab, var(--blume-foreground) 6%, transparent),
-      0 32px 80px -24px color-mix(in oklab, var(--blume-accent) 35%, transparent);
-  }
-
-  .map-pane {
-    background-image:
-      linear-gradient(
-        to right,
-        color-mix(in oklab, var(--blume-foreground) 7%, transparent) 1px,
-        transparent 1px
-      ),
-      linear-gradient(
-        to bottom,
-        color-mix(in oklab, var(--blume-foreground) 7%, transparent) 1px,
-        transparent 1px
-      );
-    background-size: 48px 48px;
+      0 32px 80px -24px color-mix(in oklab, var(--ga-green) 35%, transparent);
   }
 </style>
