@@ -31,7 +31,7 @@ The publications do not follow a modern data standard. Places and measures are d
 2. **Georeference medium voltage maps.** Create the most comprehensive public data of current and future medium voltage grids in Germany.
 3. **Make it accessible.** Publish the result so others can keep working with it, instead of starting from the original documents again.
 
-gridAhead is a cooperation of the [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/) and [Goal100](https://goal100.org/). [Google.org](https://www.google.org/) and the [Veolia Stiftung](https://www.stiftung.veolia.de/) co-fund the work.
+gridAhead is a cooperation of the [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/) and [Goal100](https://goal100.org/).
 
 ## Development
 
@@ -63,13 +63,6 @@ Check compliance with `uvx reuse lint`.
 
 ## Co-funded by
 
-<a href="https://www.google.org/">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/google-org-inverse.svg">
-    <img alt="Google.org" src="apps/docs/public/logos/google-org.svg" height="22">
-  </picture>
-</a>
-&emsp;
 <a href="https://www.stiftung.veolia.de/">
   <img alt="Veolia Stiftung" src="apps/docs/public/logos/veolia-stiftung.png" height="28">
 </a>

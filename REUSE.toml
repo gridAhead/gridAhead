@@ -67,11 +67,6 @@ SPDX-FileCopyrightText = "Goal100 GmbH"
 SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
 
 [[annotations]]
-path = "apps/docs/public/logos/google-org*.svg"
-SPDX-FileCopyrightText = "Google LLC"
-SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
-
-[[annotations]]
 path = "apps/docs/public/logos/reiner-lemoine-institut*.svg"
 SPDX-FileCopyrightText = "Reiner Lemoine Institut gGmbH"
 SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
