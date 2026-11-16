@@ -5,6 +5,7 @@ SPDX-PackageDownloadLocation = "https://github.com/gridAhead/gridAhead"
 # Licensing at a glance:
 # - Code and configuration: Apache-2.0
 # - Website prose (apps/docs/content/): CC-BY-4.0
+# - Website graphics (apps/docs/public/images/): CC-BY-4.0
 # - Citation metadata (CITATION.cff): CC0-1.0
 # - Logos and icons: LicenseRef-AllRightsReserved (not openly licensed)
 #
@@ -18,6 +19,7 @@ path = [
     ".gitignore",
     ".prettierignore",
     "README.md",
+    "CHANGELOG.md",
     "package.json",
     "pnpm-lock.yaml",
     "pnpm-workspace.yaml",
@@ -44,6 +46,17 @@ SPDX-FileCopyrightText = [
     "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
     "2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut",
     "2026 Bahne Carstensen <https://github.com/bahne-io> © Goal100 GmbH",
+]
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# Website graphics (landing page map). The map contains administrative boundaries
+# from the BKG (VG250), which are licensed under dl-de/by-2-0.
+[[annotations]]
+path = "apps/docs/public/images/**"
+SPDX-FileCopyrightText = [
+    "2026 Reiner Lemoine Institut gGmbH",
+    "2026 Goal100 GmbH",
+    "2026 Bundesamt für Kartographie und Geodäsie (BKG), dl-de/by-2-0, modified",
 ]
 SPDX-License-Identifier = "CC-BY-4.0"
 
