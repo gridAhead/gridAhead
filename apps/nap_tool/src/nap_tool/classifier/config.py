@@ -112,12 +112,28 @@ class CountThresholds(BaseModel):
     warn: tuple[int, int]
 
 
+class CompactSheetSettings(BaseModel):
+    """Relative deviation limits of the compact sheet check."""
+
+    passing: float = Field(alias="pass", ge=0)
+    warn: float = Field(ge=0)
+    # Sheet costs are in Mio. EUR; the records' reported_amount_eur is in EUR.
+    cost_divisor: float = Field(default=1_000_000, gt=0)
+
+    @model_validator(mode="after")
+    def check_order(self):
+        if self.warn < self.passing:
+            raise ValueError("Compact sheet warn limit must not be below pass limit")
+        return self
+
+
 class ValidationSettings(BaseModel):
     dso_count: CountThresholds
     measure_share: RatioThresholds
     vocabulary: RatioThresholds
     coverage: RatioThresholds
     plausibility: dict[str, tuple[float, float]]
+    compact_sheet: CompactSheetSettings | None = None
 
 
 class ClassifyConfig(BaseModel):

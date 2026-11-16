@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import dataclass
 
+from .compact_sheet import CompactSheet
 from .config import ClassifyConfig
 from .locations import LocationFinder
 from .rules import (
@@ -140,6 +141,7 @@ def classify(
     dso_identifiers: dict[str, dict[str, str]],
     *,
     field_mapping: dict[str, str] | None = None,
+    compact_sheets: dict[str, CompactSheet] | None = None,
 ) -> ClassificationResult:
     """Append derived columns to harmonized rows and validate the result.
 
@@ -151,6 +153,7 @@ def classify(
         config: Classification configuration.
         dso_identifiers: Name, MaStR number and BDEW code per DSO slug.
         field_mapping: Stable field keys mapped to the original CSV headers.
+        compact_sheets: Parsed compact sheet per DSO slug; None skips the compact sheet check.
 
     Returns:
         Classified rows, validation report and unmapped vocabulary values.
@@ -291,7 +294,7 @@ def classify(
         for item in unmatched.values()
     ]
     unmapped.sort(key=lambda item: (item["field"], -item["count"], item["value"]))
-    report = validate(outputs, kept, origins, config, unresolved)
+    report = validate(outputs, kept, origins, config, unresolved, compact_sheets)
     report["dropped_rows"] = dropped
     return ClassificationResult(outputs, report, unmapped)
 

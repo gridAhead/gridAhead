@@ -197,6 +197,8 @@ validation:
   measure_share: {pass: 0.95, warn: 0.90}
   vocabulary: {pass: 0.99, warn: 0.95}
   coverage: {pass: 0.80, warn: 0.50}
+  # Compact sheet check: relative deviation limits (pass <= 1 %, warn <= 10 %).
+  compact_sheet: {pass: 0.01, warn: 0.10, cost_divisor: 1000000}
   plausibility:
     reported_amount_eur: [0, 1000000000]
     capacity_change_mva: [-1000, 1000]

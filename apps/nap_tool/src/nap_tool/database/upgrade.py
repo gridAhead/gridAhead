@@ -102,4 +102,25 @@ def _classification_pointers(root: Path) -> dict[str, int]:
     return {"classification_pointers": converted}
 
 
-UPGRADES: dict[int, Callable[[Path], dict[str, int]]] = {20: _classification_pointers}
+def _compact_sheet_column(root: Path) -> dict[str, int]:
+    """DB_VERSION 21 -> 22: add `document.is_compact_sheet` and its unique index."""
+    with closing(sqlite3.connect(root / "nap_tool.sqlite")) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(document)")}
+        added = "is_compact_sheet" not in columns
+        with connection:
+            if added:
+                connection.execute(
+                    "ALTER TABLE document ADD COLUMN is_compact_sheet INTEGER NOT NULL "
+                    "DEFAULT 0 CHECK (is_compact_sheet IN (0, 1))"
+                )
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS document_compact_sheet "
+                "ON document(dso_id, nap_year) WHERE is_compact_sheet = 1"
+            )
+    return {"document_columns_added": int(added)}
+
+
+UPGRADES: dict[int, Callable[[Path], dict[str, int]]] = {
+    20: _classification_pointers,
+    21: _compact_sheet_column,
+}

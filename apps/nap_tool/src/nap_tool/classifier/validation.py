@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from . import compact_sheet as compact
 from .config import ClassifyConfig
 from .rules import LIST_SEPARATOR, NORMALIZED_FIELDS
 
@@ -32,6 +33,9 @@ def with_metric_expectations(report: dict, validation: dict) -> dict:
         group = name.partition(":")[0]
         if group in {"measure_share", "vocabulary", "coverage"}:
             return f"≥ {validation[group]['pass']:g}"
+        if name == "compact_sheet":
+            limits = validation.get("compact_sheet")
+            return f"≤ {limits['pass']:.0%}" if limits else ""
         if name in {"unflagged_duplicates", "documents_outside_round", "unconfirmed_cleaning"}:
             return "0"
         return ""
@@ -51,6 +55,7 @@ def validate(
     origins: list[dict],
     config: ClassifyConfig,
     unresolved: list[dict],
+    compact_sheets: dict[str, compact.CompactSheet] | None = None,
 ) -> dict:
     metrics = []
 
@@ -166,6 +171,16 @@ def validate(
         unconfirmed / len(rows) if rows else 0,
         "warn" if unconfirmed else "pass",
     )
+    check = None
+    settings = config.validation.get("compact_sheet")
+    if settings and compact_sheets is not None:
+        check = compact.compare(
+            compact_sheets,
+            compact.record_totals(rows, inputs, settings),
+            dsos,
+            settings,
+        )
+        metrics.extend(check["metrics"])
     rank = {"pass": 0, "warn": 1, "fail": 2}
     status = max(
         (item["status"] for item in metrics if item["status"] != "empty"),
@@ -221,6 +236,11 @@ def validate(
         "rows_without_document_date": [row["row_id"] for row in rows if not row["document_date"]],
         "documents_outside_round": outside,
     }
+    if check is not None:
+        report["compact_sheet_deviations"] = check["deviations"]
+        report["unmatched_subgrid_areas"] = check["unmatched_subgrid_areas"]
+        report["unassigned_planning_horizons"] = check["unassigned_planning_horizons"]
+        report["compact_sheet_documents"] = check["documents"]
     return with_metric_expectations(report, config.validation)
 
 
@@ -267,6 +287,9 @@ def markdown_report(report: dict) -> str:
         "dsos_without_codes",
         "rows_without_document_date",
         "documents_outside_round",
+        "compact_sheet_deviations",
+        "unmatched_subgrid_areas",
+        "unassigned_planning_horizons",
     ]:
         if key not in report:  # reports saved before the key existed
             continue
