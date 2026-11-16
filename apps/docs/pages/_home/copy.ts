@@ -40,7 +40,7 @@ export const landingCopy: Record<SiteLocale, LandingCopy> = {
   en: {
     activities: [
       {
-        body: "Locate announced measures from the 2024 and 2026 plans, so it is clear where and when the grid near a site will be reinforced.",
+        body: "Locate announced measures from the 2024 and 2026 plans, so it is clear where and when the grid near a site is planned to be reinforced.",
         title: "Geocode planned measures",
       },
       {
@@ -91,17 +91,17 @@ export const landingCopy: Record<SiteLocale, LandingCopy> = {
       "Making these plans easier to use does not conflict with the protection of critical infrastructure. gridAhead works only with information distribution system operators have already published.",
     introduction: { href: "/docs", label: "Read the introduction" },
     kicker: "Reiner Lemoine Institute & Goal100",
-    lead: "Since the end of October, Germany's larger distribution system operators have published a second round of grid expansion plans, more than 33,000 measures. The data is still hard to use. gridAhead turns those published plans into open, georeferenced datasets.",
+    lead: "Since the end of October, Germany's larger distribution system operators have published a second round of grid expansion plans with more than 33,000 measures. The data is still hard to use. gridAhead turns those published plans into open, georeferenced datasets.",
     problem: ["Over 33,000 measures.", "Still hard to use as data."],
     problemLead:
-      "New wind and solar plants, storage, heat pumps, and charging points can connect only as fast as the distribution grid is reinforced. The plans for that work are public. Places, coordinates, and open licences are mostly still missing.",
+      "New wind and solar plants, storage, heat pumps, and charging points can connect only as fast as the distribution grid is reinforced. The plans for that work are public. Coordinates and open licences are mostly still missing.",
     title: "gridAhead — Turning grid plans into data",
     work: ["From published plans to open data.", "What gridAhead is building."],
   },
   de: {
     activities: [
       {
-        body: "Angekündigte Maßnahmen aus den Plänen 2024 und 2026 verorten, damit klar ist, wo und wann das Netz in der Nähe eines Standorts verstärkt wird.",
+        body: "Angekündigte Maßnahmen aus den Plänen 2024 und 2026 verorten, damit klar ist, wo und wann das Netz in der Nähe eines Standorts verstärkt werden soll.",
         title: "Geplante Maßnahmen geokodieren",
       },
       {
@@ -159,7 +159,7 @@ export const landingCopy: Record<SiteLocale, LandingCopy> = {
     lead: "Seit Ende Oktober veröffentlichen die größeren deutschen Verteilnetzbetreiber eine zweite Runde ihrer Netzausbaupläne mit über 33.000 Maßnahmen. Die Daten sind weiterhin schwer nutzbar. gridAhead wandelt diese veröffentlichten Pläne in offene, georeferenzierte Datensätze um.",
     problem: ["Über 33.000 Maßnahmen.", "Als Daten weiterhin schwer nutzbar."],
     problemLead:
-      "Neue Wind- und Solaranlagen, Speicher, Wärmepumpen und Ladepunkte können nur so schnell angeschlossen werden, wie die Verteilnetze verstärkt werden. Die Pläne dafür sind öffentlich. Orte, Koordinaten und offene Lizenzen fehlen meist noch.",
+      "Neue Wind- und Solaranlagen, Speicher, Wärmepumpen und Ladepunkte können nur so schnell angeschlossen werden, wie die Verteilnetze verstärkt werden. Die Pläne dafür sind öffentlich. Koordinaten und offene Lizenzen fehlen meist noch.",
     title: "gridAhead — Netzausbaupläne in Daten umwandeln",
     work: [
       "Von veröffentlichten Plänen zu offenen Daten.",
