@@ -45,6 +45,10 @@ _Source term_: Maßnahmenplan, Maßnahmenliste
 The spreadsheet document summarizing a NAP as a cross table of grid level, period and category.
 _Source term_: Datenblatt vnbdigital.de, Kompaktdarstellung
 
+**Compact sheet check**:
+Comparing the totals of a DSO's classified records with the figures of its compact sheet.
+_Avoid_: aggregate check, reconciliation
+
 **Markdown conversion**:
 A Markdown rendering of a NAP report, used as a source of its tables.
 
@@ -132,6 +136,17 @@ A record summarizing or referencing other records, e.g. a total per grid level.
 **Asset code**:
 A three-digit code of the NAP 2026 measure lists naming the affected equipment and grid level.
 _Source term_: Betriebsmittel-Zuordnungscode
+
+**Planning horizon**:
+The period in which a record's need falls: T+5 (to 2030), T+10 (2031–2035) or target grid
+(Zielnetz, 2036–2045).
+_Source term_: Planungshorizont
+_Avoid_: period, year (when meaning the horizon)
+
+**Subgrid area**:
+A named part of a DSO's grid for which the DSO reports its needs separately.
+_Source term_: Teilnetzgebiet
+_Avoid_: region, Teilnetz
 
 **Grid level**:
 A voltage level or transformation level of the grid: EHV, EHV/HV, HV, HV/MV, MV, MV/LV, LV.
