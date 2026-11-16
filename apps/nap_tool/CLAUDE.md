@@ -25,17 +25,18 @@ Coding standards: `CODING_STANDARDS.md`.
 
 ## Gotchas
 
-- README "Folder layout", "Extract tables" and "Compare and accept tables" describe a
-  removed pipeline; trust the code.
+- The nap-tool docs page (`../docs/content/docs/nap-tool/index.mdx`) describes the CLI,
+  folder layout and data version; update it when commands, paths or `DB_VERSION` change.
 - Bump `DB_VERSION` for anything a nap_tool of the other version would misread: SQL schema,
   seeded ids, path layout, parsed file formats (ADR-0003). Each bump needs a step in
   `database/upgrade.py`; `nap-tool upgrade` applies it to nap_data.
 - Classification output is switched by a pointer file, not a symlink, so it works on
   Windows (ADR-0006).
-- Classification rules live in `config/classify*.yaml`, output in `docs/classification.md`;
-  patterns on case-folded text use `ss` for `ß`.
+- Classification rules live in `config/classify*.yaml`; the written reference is
+  `../docs/content/docs/nap-tool/classification.md`. Patterns on case-folded text use `ss`
+  for `ß`.
 - Before working on NAP 2026 data, record keys, asset codes or validation, read
-  `docs/nap-2026.md`.
+  `../docs/content/docs/nap-tool/nap-2026.md`.
 - `extract` offers only docling and llmPDF; `comparator/` and `database_ui/` are stale.
 
 ## Guardrails
