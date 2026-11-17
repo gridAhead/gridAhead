@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "passThroughEnv": ["NAP_DATA_DIR", "LLAMA_CLOUD_API_KEY", "UV_*"]
+    },
+    "lint": {
+      "passThroughEnv": ["UV_*"]
+    },
+    "test": {
+      "cache": false,
+      "passThroughEnv": ["NAP_DATA_DIR", "LLAMA_CLOUD_API_KEY", "UV_*"]
+    }
+  }
+}

@@ -1,9 +1,17 @@
 ---
 import Logo from "./Logo.astro";
+
+interface Props {
+  /** Language of the page this block is written for. Defaults to English. */
+  locale?: "de" | "en";
+}
+
+const { locale = "en" } = Astro.props;
+const de = locale === "de";
 ---
 
 <div class="not-prose mt-12 border-border border-t pt-8">
-  <p class="m-0 text-muted-foreground text-xs">Cooperation</p>
+  <p class="m-0 text-muted-foreground text-xs">{de ? "Kooperation" : "Cooperation"}</p>
   <div class="mt-5 flex flex-wrap items-center gap-x-10 gap-y-6">
     <Logo
       alt="Reiner Lemoine Institut"
@@ -20,11 +28,17 @@ import Logo from "./Logo.astro";
       srcDark="/logos/goal100-inverse.svg"
     />
   </div>
-  <p class="mt-14 mb-0 text-muted-foreground text-xs">Co-funded by</p>
+  <p class="mt-14 mb-0 text-muted-foreground text-xs">
+    {
+      de
+        ? "Die Initiative von Goal100 in diesem Projekt wird von der ProjectTogether gGmbH gehostet und gemeinsam gefördert von"
+        : "Goal100's initiative in this project is hosted by ProjectTogether gGmbH and co-funded by"
+    }
+  </p>
   <div class="mt-5 flex flex-wrap items-start gap-x-10 gap-y-6">
     <Logo
       alt="Google.org"
-      class="h-5"
+      class="h-6"
       href="https://www.google.org/"
       src="/logos/google-org.svg"
       srcDark="/logos/google-org-inverse.svg"

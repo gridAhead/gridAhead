@@ -3,7 +3,7 @@ import { defineConfig } from "blume";
 export default defineConfig({
   title: "gridAhead",
   description:
-    "Geocode and georeference distribution grid expansion plans so the public can use them.",
+    "An open-source and open-data project that turns published German grid expansion plans into accessible, georeferenced datasets.",
   logo: {
     image: "/logos/gridahead.svg",
     text: "",
@@ -25,6 +25,7 @@ export default defineConfig({
   },
   i18n: {
     defaultLocale: "en",
+    parser: "dot",
     locales: [
       { code: "en", label: "English" },
       { code: "de", label: "Deutsch" },

@@ -1,0 +1,152 @@
+version = 1
+SPDX-PackageName = "gridAhead"
+SPDX-PackageDownloadLocation = "https://github.com/gridAhead/gridAhead"
+
+# Licensing at a glance:
+# - Code and configuration: Apache-2.0
+# - Website prose (apps/docs/content/): CC-BY-4.0
+# - Website graphics (apps/docs/public/images/): CC-BY-4.0
+# - Citation metadata (CITATION.cff): CC0-1.0
+# - Logos and icons: LicenseRef-AllRightsReserved (not openly licensed)
+#
+# Files that carry an inline SPDX header keep it; the annotations below cover
+# files without one. If several annotations match a file, the last one wins.
+
+# --- Repository root and website ----------------------------------------------
+
+[[annotations]]
+path = [
+    ".gitignore",
+    ".prettierignore",
+    "README.md",
+    "CHANGELOG.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "turbo.json",
+    ".github/**",
+    "apps/docs/**",
+]
+SPDX-FileCopyrightText = [
+    "2026 Jakob Ortmann <https://github.com/ortimis> © Goal100 GmbH",
+    "2026 Kevin Krämer <https://github.com/kvnkrmr> © Goal100 GmbH",
+    "2026 Rosmarie Debski <https://github.com/Glitterrosie> © Goal100 GmbH",
+    "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
+    "2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut",
+    "2026 Bahne Carstensen <https://github.com/bahne-io> © Goal100 GmbH",
+]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "apps/docs/content/**"
+SPDX-FileCopyrightText = [
+    "2026 Jakob Ortmann <https://github.com/ortimis> © Goal100 GmbH",
+    "2026 Kevin Krämer <https://github.com/kvnkrmr> © Goal100 GmbH",
+    "2026 Rosmarie Debski <https://github.com/Glitterrosie> © Goal100 GmbH",
+    "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
+    "2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut",
+    "2026 Bahne Carstensen <https://github.com/bahne-io> © Goal100 GmbH",
+]
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# Website graphics (landing page map). The map contains administrative boundaries
+# from the BKG (VG250), which are licensed under dl-de/by-2-0.
+[[annotations]]
+path = "apps/docs/public/images/**"
+SPDX-FileCopyrightText = [
+    "2026 Reiner Lemoine Institut gGmbH",
+    "2026 Goal100 GmbH",
+    "2026 Bundesamt für Kartographie und Geodäsie (BKG), dl-de/by-2-0, modified",
+]
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# gridAhead logo and icons.
+[[annotations]]
+path = [
+    "apps/docs/public/icon.svg",
+    "apps/docs/public/apple-icon.png",
+    "apps/docs/public/logos/gridahead*.svg",
+]
+SPDX-FileCopyrightText = [
+    "2026 Reiner Lemoine Institut gGmbH",
+    "2026 Goal100 GmbH",
+]
+SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
+
+# Partner and funder logos: trademarks of their owners.
+[[annotations]]
+path = "apps/docs/public/logos/goal100*.svg"
+SPDX-FileCopyrightText = "Goal100 GmbH"
+SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
+
+[[annotations]]
+path = "apps/docs/public/logos/reiner-lemoine-institut*.svg"
+SPDX-FileCopyrightText = "Reiner Lemoine Institut gGmbH"
+SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
+
+[[annotations]]
+path = "apps/docs/public/logos/google-org*.svg"
+SPDX-FileCopyrightText = "Google LLC"
+SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
+
+[[annotations]]
+path = "apps/docs/public/logos/veolia-stiftung.png"
+SPDX-FileCopyrightText = "Veolia Stiftung"
+SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
+
+# --- apps/nap_tool ------------------------------------------------------------
+# Files that cannot carry an inline header (no comment syntax, generated, or vendored).
+
+[[annotations]]
+path = ["apps/nap_tool/uv.lock", "apps/nap_tool/.env.example"]
+SPDX-FileCopyrightText = [
+    "2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut",
+    "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
+    "2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut",
+]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+    "apps/nap_tool/.python-version",
+    "apps/nap_tool/src/nap_tool/ui/frontend/package.json",
+    "apps/nap_tool/src/nap_tool/ui/frontend/tsconfig.json",
+    "apps/nap_tool/src/nap_tool/ui/static/**",
+]
+SPDX-FileCopyrightText = [
+    "2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut",
+    "2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut",
+    "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
+]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "apps/nap_tool/tests/**/.gitkeep"
+SPDX-FileCopyrightText = [
+    "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
+    "2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut",
+    "2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut",
+]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+    "apps/nap_tool/package.json",
+    "apps/nap_tool/turbo.json",
+    "apps/nap_tool/src/nap_tool/ui/frontend/turbo.json",
+]
+SPDX-FileCopyrightText = [
+    "2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut",
+    "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
+    "2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut",
+]
+SPDX-License-Identifier = "Apache-2.0"
+
+# Vendored / bundled PDF.js (Mozilla). Listed last so it overrides static/** above.
+[[annotations]]
+path = [
+    "apps/nap_tool/src/nap_tool/ui/frontend/src/vendor/pdfjs/**",
+    "apps/nap_tool/src/nap_tool/ui/static/assets/pdf.worker.min-*.mjs",
+]
+SPDX-FileCopyrightText = "2024 Mozilla Foundation"
+SPDX-License-Identifier = "Apache-2.0"

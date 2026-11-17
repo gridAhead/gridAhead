@@ -1,0 +1,14 @@
+<!--
+SPDX-FileCopyrightText: 2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut
+SPDX-FileCopyrightText: 2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut
+SPDX-FileCopyrightText: 2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# Authors
+
+NAP Tool is developed at the [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/).
+
+- Hendrik Huyskens ([@henhuy](https://github.com/henhuy)), Reiner Lemoine Institut
+- Jonathan Amme ([@nesnoj](https://github.com/nesnoj)), Reiner Lemoine Institut

@@ -1,0 +1,243 @@
+---
+import type { SiteLocale } from "../../lib/locale.ts";
+import { localeSwitch, navigationFor, uiFor } from "../../lib/locale.ts";
+import Chevron from "../../components/Chevron.astro";
+import Logo from "../../components/Logo.astro";
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+import { landingCopy } from "./copy.ts";
+
+interface Props {
+  locale: SiteLocale;
+}
+
+const { locale } = Astro.props;
+const copy = landingCopy[locale];
+const { config } = data;
+const route = locale === config.i18n?.defaultLocale ? "/" : `/${locale}`;
+---
+
+<PageLayout
+  site={{ title: config.title, description: copy.description }}
+  logo={config.logo}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={navigationFor(data, locale)}
+  favicon={config.favicon}
+  appleIcon={config.appleIcon}
+  fontCssVars={data.fontCssVars}
+  themeMode={config.theme.mode}
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  structuredDataEnabled={config.structuredData}
+  locale={locale}
+  ui={uiFor(data, locale)}
+  localeSwitch={localeSwitch(data, locale, "/")}
+  page={{
+    title: copy.title,
+    description: copy.description,
+    route,
+  }}
+>
+  <section class="pt-16 pb-16 sm:pt-24 sm:pb-20">
+    <div class="mx-auto max-w-[1400px] px-6">
+      <p class="m-0 text-muted-foreground text-xs">
+        {copy.kicker}
+      </p>
+      <h1
+        class="mt-6 mb-0 max-w-3xl text-balance font-medium text-4xl leading-none sm:text-5xl lg:text-6xl"
+      >
+        <span class="block">{copy.headline[0]}</span>
+        <span class="block">{copy.headline[1]}</span>
+        <span class="block text-muted-foreground">{copy.headline[2]}</span>
+      </h1>
+      <p class="mt-8 mb-0 max-w-xl text-pretty text-lg text-muted-foreground">
+        {copy.lead}
+      </p>
+      <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <a
+          class="inline-flex items-center gap-1 font-medium text-accent text-sm hover:text-foreground"
+          href={copy.docs.href}
+        >
+          {copy.docs.label}
+          <Chevron />
+        </a>
+        <a
+          class="inline-flex items-center gap-1 font-medium text-accent text-sm hover:text-foreground"
+          href={copy.announcement.href}
+        >
+          {copy.announcement.label}
+          <Chevron />
+        </a>
+      </div>
+    </div>
+
+    <div class="mx-auto mt-16 max-w-[1400px] px-6 sm:mt-20">
+      <div class="hero-bloom overflow-hidden rounded-[28px] px-3 pt-8 sm:px-16 sm:pt-16">
+        <figure class="preview-window m-0 overflow-hidden rounded-t-2xl bg-background">
+          <img
+            alt={copy.figure}
+            class="block h-auto w-full"
+            decoding="async"
+            height="727"
+            src="/images/landing-map.png"
+            width="1600"
+          />
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-border border-t">
+    <div class="mx-auto max-w-[1400px] px-6 py-20 sm:py-28">
+      <h2 class="mt-0 mb-0 max-w-3xl font-medium text-3xl leading-none sm:text-4xl">
+        <span class="block">{copy.problem[0]}</span>
+        <span class="block text-muted-foreground">{copy.problem[1]}</span>
+      </h2>
+      <p class="mt-8 mb-0 max-w-xl text-pretty text-lg text-muted-foreground">
+        {copy.problemLead}
+      </p>
+      <dl class="mt-16 grid gap-12 md:grid-cols-3 md:gap-8">
+        {
+          copy.facts.map((fact) => (
+            <div class="border-border border-t pt-5">
+              <dt class="font-medium text-xl">{fact.title}</dt>
+              <dd class="mt-2 mb-0 text-muted-foreground leading-relaxed">
+                {fact.body}
+              </dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <section class="border-border border-t">
+    <div class="mx-auto max-w-[1400px] px-6 py-20 sm:py-28">
+      <h2 class="mt-0 mb-0 max-w-3xl font-medium text-3xl leading-none sm:text-4xl">
+        <span class="block">{copy.work[0]}</span>
+        <span class="block text-muted-foreground">{copy.work[1]}</span>
+      </h2>
+      <ol class="mt-16 grid list-none gap-px overflow-hidden rounded-2xl border border-border bg-border p-0 md:grid-cols-2">
+        {
+          copy.activities.map((activity, index) => (
+            <li class="bg-background px-6 py-8">
+              <p class="m-0 font-mono text-muted-foreground text-xs">
+                {String(index + 1).padStart(2, "0")}
+              </p>
+              <h3 class="mt-4 mb-0 font-medium text-xl">{activity.title}</h3>
+              <p class="mt-3 mb-0 text-muted-foreground leading-relaxed">
+                {activity.body}
+                {activity.link && (
+                  <>
+                    {" "}
+                    <a
+                      class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+                      href={activity.link.href}
+                    >
+                      {activity.link.label}
+                    </a>
+                  </>
+                )}
+              </p>
+            </li>
+          ))
+        }
+      </ol>
+      <p class="mt-10 mb-0 max-w-xl text-muted-foreground leading-relaxed">
+        {copy.infrastructure}
+      </p>
+    </div>
+  </section>
+
+  <section class="border-border border-t">
+    <div class="mx-auto max-w-[1400px] px-6 py-16 sm:py-24">
+      <div class="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="m-0 text-muted-foreground text-xs">{copy.cooperationKicker}</p>
+          <p class="mt-4 mb-0 max-w-xl font-medium text-3xl leading-none sm:text-4xl">
+            {copy.cooperation}
+          </p>
+          <div class="mt-10 flex flex-wrap items-center gap-x-12 gap-y-8">
+            <Logo
+              alt="Reiner Lemoine Institut"
+              class="h-11"
+              href="https://reiner-lemoine-institut.de/"
+              src="/logos/reiner-lemoine-institut.svg"
+              srcDark="/logos/reiner-lemoine-institut-inverse.svg"
+            />
+            <Logo
+              alt="Goal100"
+              class="h-14"
+              href="https://goal100.org/"
+              src="/logos/goal100.svg"
+              srcDark="/logos/goal100-inverse.svg"
+            />
+          </div>
+        </div>
+        <a
+          class="inline-flex shrink-0 items-center gap-1 font-medium text-accent text-sm hover:text-foreground"
+          href={copy.introduction.href}
+        >
+          {copy.introduction.label}
+          <Chevron />
+        </a>
+      </div>
+      <div class="mt-16 border-border border-t pt-10">
+        <p class="m-0 text-muted-foreground text-xs">{copy.fundedKicker}</p>
+        <p class="mt-4 mb-0 max-w-xl text-muted-foreground leading-relaxed">
+          {copy.fundedBefore}<a
+            class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+            href="https://projecttogether.org/"
+          >ProjectTogether</a>{copy.fundedAfter}
+        </p>
+        <div class="mt-6 flex flex-wrap items-start gap-x-12 gap-y-8">
+          <Logo
+            alt="Google.org"
+            class="h-6"
+            href="https://www.google.org/"
+            src="/logos/google-org.svg"
+            srcDark="/logos/google-org-inverse.svg"
+          />
+          <Logo
+            alt="Veolia Stiftung"
+            caption="Veolia Stiftung"
+            class="h-7"
+            href="https://www.stiftung.veolia.de/"
+            src="/logos/veolia-stiftung.png"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  /* gridAhead logo green */
+  .hero-bloom,
+  .preview-window {
+    --ga-green: #00c46a;
+  }
+
+  .hero-bloom {
+    background-color: color-mix(in oklab, var(--ga-green) 12%, var(--blume-background));
+    background-image:
+      radial-gradient(
+        70% 60% at 50% 100%,
+        color-mix(in oklab, var(--ga-green) 72%, transparent),
+        transparent 75%
+      ),
+      radial-gradient(
+        120% 90% at 50% 100%,
+        color-mix(in oklab, var(--ga-green) 32%, transparent),
+        transparent 80%
+      );
+  }
+
+  .preview-window {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--blume-foreground) 6%, transparent),
+      0 32px 80px -24px color-mix(in oklab, var(--ga-green) 35%, transparent);
+  }
+</style>

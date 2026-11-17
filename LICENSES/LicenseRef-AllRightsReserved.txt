@@ -1,0 +1,7 @@
+All rights reserved.
+
+The files marked with this identifier are logos, icons or other marks of the gridAhead project, its partners and its funders. They are the property of their respective owners and may be protected as trademarks.
+
+They are not covered by the open licenses of this repository (Apache-2.0, CC-BY-4.0, CC0-1.0). They are included only to identify the project and to credit its partners and funders.
+
+Reproduction, modification or use of these files outside this repository requires the prior permission of the respective owner.
