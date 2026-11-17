@@ -68,6 +68,13 @@ Check compliance with `uvx reuse lint`.
 
 ## Co-funded by
 
+<a href="https://www.google.org/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/logos/google-org-inverse.svg">
+    <img alt="Google.org" src="apps/docs/public/logos/google-org.svg" height="22">
+  </picture>
+</a>
+&emsp;
 <a href="https://www.stiftung.veolia.de/">
   <img alt="Veolia Stiftung" src="apps/docs/public/logos/veolia-stiftung.png" height="28">
 </a>
