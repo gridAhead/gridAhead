@@ -20,7 +20,7 @@ from typing import Iterator
 # formats the code parses. New documents, tables, reviews and outputs never bump
 # it. connect() never upgrades a database; `nap-tool upgrade` (database/upgrade.py)
 # applies a step's changes and then sets the new user_version.
-DB_VERSION = 22
+DB_VERSION = 24
 TABLE_TYPE_GRID_MEASURES = 1
 TABLE_TYPE_REGIONAL_SCENARIO_PARAMETERS = 2
 TYPE_SCHEMA = """
@@ -68,6 +68,32 @@ CREATE TABLE IF NOT EXISTS harmonize_scheme (
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 """
+ARTIFACT_SCHEMA = """
+CREATE TABLE IF NOT EXISTS extraction_artifact (
+    id INTEGER PRIMARY KEY,
+    document_id INTEGER NOT NULL REFERENCES document(id),
+    kind TEXT NOT NULL CHECK (kind = 'markdown'),
+    file_path TEXT NOT NULL, hash TEXT NOT NULL,
+    tool TEXT, created_at TEXT,
+    UNIQUE (document_id, file_path)
+);
+"""
+# SQLite cannot add a composite foreign key to an existing table with ALTER TABLE.
+ARTIFACT_GUARDS = """
+CREATE TRIGGER IF NOT EXISTS artifact_owner_immutable BEFORE UPDATE OF document_id
+ON extraction_artifact WHEN NEW.document_id != OLD.document_id
+BEGIN SELECT RAISE(ABORT, 'Cannot reassign an extraction artifact'); END;
+""" + "".join(
+    f"""
+CREATE TRIGGER IF NOT EXISTS extract_artifact_{action.lower()} BEFORE {action} ON extract_table
+WHEN NEW.artifact_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM extraction_artifact WHERE id=NEW.artifact_id AND document_id=NEW.document_id
+)
+BEGIN SELECT RAISE(ABORT, 'Artifact must belong to the source document'); END;
+"""
+    for action in ("INSERT", "UPDATE")
+)
+
 SCHEMA = (
     TYPE_SCHEMA
     + """
@@ -84,6 +110,7 @@ CREATE TABLE IF NOT EXISTS document (
     created_by_run_id INTEGER REFERENCES download_run(id),
     title TEXT NOT NULL, source_document_id TEXT, hash TEXT, source_url TEXT,
     source TEXT NOT NULL, version TEXT, current_to TEXT, file_path TEXT,
+    source_publication_status TEXT,
     nap_year INTEGER CHECK (nap_year BETWEEN 2000 AND 2100),
     is_selected INTEGER NOT NULL DEFAULT 1 CHECK (is_selected IN (0, 1)),
     is_compact_sheet INTEGER NOT NULL DEFAULT 0 CHECK (is_compact_sheet IN (0, 1)),
@@ -96,6 +123,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS document_compact_sheet
 CREATE INDEX IF NOT EXISTS document_source ON document(dso_id, source, source_document_id);
 CREATE TABLE IF NOT EXISTS extract_table (
     id INTEGER PRIMARY KEY, document_id INTEGER NOT NULL REFERENCES document(id),
+    artifact_id INTEGER REFERENCES extraction_artifact(id),
     tool TEXT NOT NULL, table_number INTEGER NOT NULL,
     is_selected INTEGER NOT NULL DEFAULT 1,
     page_table_index INTEGER, pages TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(pages)),
@@ -156,6 +184,8 @@ CREATE TABLE IF NOT EXISTS harmonize_field_source (
 CREATE INDEX IF NOT EXISTS harmonize_source_extract ON harmonize_field_source(extract_id);
 CREATE INDEX IF NOT EXISTS harmonize_source_clean ON harmonize_field_source(clean_id);
 """
+    + ARTIFACT_SCHEMA
+    + ARTIFACT_GUARDS
     + CLASSIFICATION_SCHEMA
     + HARMONIZE_SCHEMA
     + SET_SCHEMA

@@ -275,6 +275,7 @@ def create_app(root: Path | None = None) -> FastAPI:
             "download_run",
             "dso",
             "document",
+            "extraction_artifact",
             "extract_table",
             "table_type",
             "extract_table_type",
@@ -403,7 +404,8 @@ def create_app(root: Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=404, detail="DSO not found")
             rows = connection.execute(
                 "SELECT d.id, d.title, d.version, d.nap_year, d.source, d.is_selected, "
-                "d.is_compact_sheet, d.file_path IS NOT NULL AS is_downloaded, d.file_path, "
+                "d.source_publication_status, d.is_compact_sheet, "
+                "d.file_path IS NOT NULL AS is_downloaded, d.file_path, "
                 "d.created_at, d.updated_at, "
                 "v.slug AS dso_slug, v.name AS vnb_name, "
                 "(SELECT COUNT(*) FROM extract_table e WHERE e.document_id=d.id) "
@@ -567,6 +569,36 @@ def create_app(root: Path | None = None) -> FastAPI:
             path, media_type="text/plain; charset=utf-8", content_disposition_type="inline"
         )
 
+    @app.get("/api/overview/documents/{document_id}/artifacts")
+    def document_artifacts(document_id: int) -> list[dict[str, object]]:
+        """List Markdown conversions of the selected source document."""
+        with _read_database(repository) as connection:
+            return [
+                dict(row)
+                for row in connection.execute(
+                    "SELECT id, kind, tool, created_at FROM extraction_artifact "
+                    "WHERE document_id=? ORDER BY created_at DESC, id DESC",
+                    (document_id,),
+                )
+            ]
+
+    @app.get("/api/overview/artifacts/{artifact_id}/text")
+    def artifact_text(artifact_id: int) -> FileResponse:
+        """Show the verified conversion as inert UTF-8 text."""
+        with _read_database(repository) as connection:
+            row = connection.execute(
+                "SELECT file_path, hash FROM extraction_artifact WHERE id=? AND kind='markdown'",
+                (artifact_id,),
+            ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Markdown artifact not found")
+        path = _verified_file(repository, row["file_path"], row["hash"])
+        return FileResponse(
+            path,
+            media_type="text/plain; charset=utf-8",
+            headers={"X-Content-Type-Options": "nosniff"},
+        )
+
     @app.get("/api/overview/extract-tables")
     def extract_tables(
         document_id: int | None = Query(default=None, gt=0),
@@ -586,7 +618,7 @@ def create_app(root: Path | None = None) -> FastAPI:
             Extracted table summaries.
         """
         query = (
-            "SELECT e.id, e.document_id, e.tool, e.table_number, e.pages, "
+            "SELECT e.id, e.document_id, e.artifact_id, e.tool, e.table_number, e.pages, "
             "e.is_selected, et.table_type_id AS table_type, e.extract_is_confirmed, "
             "e.extract_is_archived, e.extract_reviewed_source_hash, "
             "e.extract_reviewed_table_path, "
@@ -631,6 +663,7 @@ def create_app(root: Path | None = None) -> FastAPI:
                 {
                     "id": row["id"],
                     "document_id": row["document_id"],
+                    "artifact_id": row["artifact_id"],
                     "document_title": row["document_title"],
                     "dso_slug": row["dso_slug"],
                     "vnb_name": row["vnb_name"],

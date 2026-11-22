@@ -18,8 +18,8 @@ from typing import Callable
 import typer
 
 from nap_tool.classifier.service import VERSIONS_DIR, is_generation, publish_pointer
-from nap_tool.data import data_dir
-from nap_tool.database.schema import DB_VERSION, require_version
+from nap_tool.data import data_dir, resolve_path, sha256_file
+from nap_tool.database.schema import ARTIFACT_GUARDS, ARTIFACT_SCHEMA, DB_VERSION, require_version
 
 
 def upgrade() -> None:
@@ -120,7 +120,74 @@ def _compact_sheet_column(root: Path) -> dict[str, int]:
     return {"document_columns_added": int(added)}
 
 
+def _source_publication_status(root: Path) -> dict[str, int]:
+    """DB_VERSION 22 -> 23: preserve the publication label supplied by the source."""
+    with closing(sqlite3.connect(root / "nap_tool.sqlite")) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(document)")}
+        added = "source_publication_status" not in columns
+        if added:
+            connection.execute("ALTER TABLE document ADD COLUMN source_publication_status TEXT")
+    return {"document_columns_added": int(added)}
+
+
+def _extraction_artifacts(root: Path) -> dict[str, int]:
+    """Register the retained Markdown sources of the historical PDF table import."""
+    with closing(sqlite3.connect(root / "nap_tool.sqlite")) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(ARTIFACT_SCHEMA)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(extract_table)")}
+        if "artifact_id" not in columns:
+            connection.execute(
+                "ALTER TABLE extract_table ADD COLUMN artifact_id INTEGER "
+                "REFERENCES extraction_artifact(id)"
+            )
+        connection.executescript(ARTIFACT_GUARDS)
+        rows = connection.execute(
+            "SELECT e.id, e.document_id, e.extract_table_path, v.slug FROM extract_table e "
+            "JOIN document d ON d.id=e.document_id JOIN dso v ON v.id=d.dso_id "
+            "WHERE e.tool='markdown' AND e.artifact_id IS NULL AND d.file_path LIKE '%.pdf'"
+        ).fetchall()
+        candidates = []
+        for extract_id, document_id, csv_path, slug in rows:
+            parts = Path(csv_path).parts
+            if len(parts) < 5 or parts[:2] != ("extracted", slug) or parts[3] != "markdown":
+                continue
+            # The import stored its CSVs under the first 16 hex digits of the Markdown SHA.
+            if len(parts[2]) == 16:
+                relative = f"documents/{slug}/{parts[2]}.md"
+                if resolve_path(root, relative).is_file():
+                    candidates.append((extract_id, document_id, relative, parts[2], None))
+        candidates.extend(
+            connection.execute(
+                "SELECT e.id, e.document_id, j.value->>'$.path', j.value->>'$.hash', e.tool "
+                "FROM extract_table e, json_each(e.extract_table_notes, '$.native_files') j "
+                "WHERE e.artifact_id IS NULL AND e.tool='llmPDF' "
+                "AND j.value->>'$.path' LIKE '%/native/output.md'"
+            )
+        )
+        artifacts: dict[tuple[int, str], int] = {}
+        with connection:
+            for extract_id, document_id, relative, expected, tool in candidates:
+                key = (document_id, relative)
+                if key not in artifacts:
+                    digest = sha256_file(resolve_path(root, relative))
+                    if expected != (digest if tool else digest[:16]):
+                        raise ValueError(f"Markdown hash mismatch: {relative}")
+                    artifacts[key] = connection.execute(
+                        "INSERT INTO extraction_artifact(document_id, kind, file_path, hash, tool) "
+                        "VALUES (?, 'markdown', ?, ?, ?) RETURNING id",
+                        (document_id, relative, digest, tool),
+                    ).fetchone()[0]
+                connection.execute(
+                    "UPDATE extract_table SET artifact_id=? WHERE id=?",
+                    (artifacts[key], extract_id),
+                )
+        return {"markdown_artifacts": len(artifacts)}
+
+
 UPGRADES: dict[int, Callable[[Path], dict[str, int]]] = {
     20: _classification_pointers,
     21: _compact_sheet_column,
+    22: _source_publication_status,
+    23: _extraction_artifacts,
 }

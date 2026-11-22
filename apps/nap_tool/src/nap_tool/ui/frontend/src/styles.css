@@ -140,7 +140,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 11px; color: #8399a5; font-size: 10px; margin-top: 12px; line-height: 1.35; }
 .item-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .item-meta span + span::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: #b9c8d0; margin-right: 6px; }
-.file-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.file-title { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .badge-line { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 11px; }
 .badge { font-size: 9px; font-weight: 730; line-height: 1; border-radius: 4px; padding: 5px 6px; white-space: nowrap; }
 .badge-success { color: #27713e; background: #e5f5e9; }

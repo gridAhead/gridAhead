@@ -108,6 +108,7 @@ def test_latest_vnbdigital_candidates_selects_the_newest_report(monkeypatch) -> 
             "&fileId=6aee326c8834460c54fece66&preview=1",
             "version": "2026-11-06T20:02:00+00:00",
             "nap_year": 2026,
+            "source_publication_status": "DRAFT",
         }
     ]
     assert calls == [None, {"vnbId": WSW}, {"vnbId": "empty"}]
@@ -125,6 +126,7 @@ def test_report_ranking_within_a_round(monkeypatch) -> None:
 
     [candidate] = sources._latest_vnbdigital_candidates(GRAPHQL_URL)
 
+    assert candidate["source_publication_status"] == "FINAL"
     assert candidate["document_id"] == "final"
     assert candidate["nap_year"] == 2024
 

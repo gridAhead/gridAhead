@@ -30,7 +30,7 @@ type Line = { key: string; path: string; startX: number; startY: number; endX: n
 const lanes = [
   { title: t("01 / Data sources"), tables: ['download_run', 'dso'] },
   { title: t("02 / Source documents"), tables: ['document'] },
-  { title: t("03 / Table extraction"), tables: ['extract_table', 'table_type', 'extract_table_type'] },
+  { title: t("03 / Table extraction"), tables: ['extraction_artifact', 'extract_table', 'table_type', 'extract_table_type'] },
   { title: t("04 / Data cleaning"), tables: ['clean_table'] },
   { title: t("05 / Field harmonization"), tables: ['harmonize_scheme', 'harmonize_field', 'harmonize_field_source'] },
   { title: t("06 / Sets & outputs"), tables: ['harmonize_set', 'harmonize_set_output'] },
@@ -40,6 +40,7 @@ const descriptions: Record<string, string> = {
   download_run: t("One CLI download run can create multiple documents"),
   dso: t("DSOs and their MaStR and BDEW IDs; each DSO has multiple documents"),
   document: t("Source PDFs, provenance, versions and selection status"),
+  extraction_artifact: t("Markdown conversions of source PDFs"),
   extract_table: t("Extracted tables and review metadata"),
   table_type: t("Available table types"),
   extract_table_type: t("One table type per extracted table"),

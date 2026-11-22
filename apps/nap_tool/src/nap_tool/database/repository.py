@@ -41,6 +41,7 @@ class Candidate:
         title: Original document name.
         source_url: PDF URL.
         version: Source version or validity date.
+        source_publication_status: Publication label supplied by the source, when available.
         nap_year: NAP round stated by the source; inferred from title and version if None.
     """
 
@@ -52,6 +53,7 @@ class Candidate:
     source_url: str
     version: str | None = None
     nap_year: int | None = None
+    source_publication_status: str | None = None
 
 
 def store_candidates(database: Path, candidates: list[Candidate]) -> tuple[int, int]:
@@ -78,27 +80,66 @@ def store_candidates(database: Path, candidates: list[Candidate]) -> tuple[int, 
             dso_id = connection.execute(
                 "SELECT id FROM dso WHERE slug=?", (candidate.provider_slug,)
             ).fetchone()[0]
-            existing = connection.execute(
-                "SELECT id, hash, version FROM document WHERE dso_id=? AND source=? "
-                "AND COALESCE(source_document_id, '')=COALESCE(?, '') AND source_url=? "
-                "ORDER BY id DESC LIMIT 1",
-                (dso_id, candidate.source, candidate.source_document_id, candidate.source_url),
-            ).fetchone()
+            version, current_to = version_dates(candidate.version)
+            status = candidate.source_publication_status
+            stable_id = candidate.source == "vnbdigital" and bool(candidate.source_document_id)
+            if stable_id:
+                # Older imports can lack a version. The stable file ID still identifies them.
+                existing = connection.execute(
+                    "SELECT id, hash, source_url, version, source_publication_status FROM document "
+                    "WHERE dso_id=? AND source=? AND source_document_id=? "
+                    "AND (version IS ? OR version IS NULL OR ? IS NULL) "
+                    "ORDER BY (version IS ?) DESC, id DESC LIMIT 1",
+                    (
+                        dso_id,
+                        candidate.source,
+                        candidate.source_document_id,
+                        version,
+                        version,
+                        version,
+                    ),
+                ).fetchone()
+            else:
+                existing = connection.execute(
+                    "SELECT id, hash, source_url, version, source_publication_status FROM document "
+                    "WHERE dso_id=? AND source=? "
+                    "AND COALESCE(source_document_id, '')=COALESCE(?, '') AND source_url=? "
+                    "ORDER BY id DESC LIMIT 1",
+                    (dso_id, candidate.source, candidate.source_document_id, candidate.source_url),
+                ).fetchone()
             if existing is not None:
                 if existing["hash"] is None:
-                    version, current_to = version_dates(candidate.version)
                     connection.execute(
-                        "UPDATE document SET title=?, version=?, current_to=?, "
+                        "UPDATE document SET title=?, version=?, current_to=?, source_url=?, "
+                        "source_publication_status=COALESCE(?, source_publication_status), "
                         "updated_at=? WHERE id=?",
-                        (candidate.title, version, current_to, stamp, existing["id"]),
+                        (
+                            candidate.title,
+                            version,
+                            current_to,
+                            candidate.source_url,
+                            status,
+                            stamp,
+                            existing["id"],
+                        ),
+                    )
+                elif (
+                    existing["source_url"] != candidate.source_url
+                    or (stable_id and existing["version"] is None and version is not None)
+                    or (status is not None and status != existing["source_publication_status"])
+                ):
+                    connection.execute(
+                        "UPDATE document SET source_url=?, version=COALESCE(version, ?), "
+                        "source_publication_status=COALESCE(?, source_publication_status), "
+                        "updated_at=? WHERE id=?",
+                        (candidate.source_url, version, status, stamp, existing["id"]),
                     )
                 known += 1
                 continue
-            version, current_to = version_dates(candidate.version)
             connection.execute(
                 "INSERT INTO document(dso_id, title, source_document_id, source_url, source, "
-                "version, current_to, nap_year, is_selected, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+                "version, current_to, source_publication_status, nap_year, is_selected, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
                 (
                     dso_id,
                     candidate.title,
@@ -107,6 +148,7 @@ def store_candidates(database: Path, candidates: list[Candidate]) -> tuple[int, 
                     candidate.source,
                     version,
                     current_to,
+                    status,
                     candidate.nap_year
                     if candidate.nap_year is not None
                     else infer_nap_year(candidate.title, candidate.version),
@@ -193,11 +235,28 @@ def record_download(
     write_bytes(root, relative, content)
     with connect(database) as connection:
         existing = connection.execute(
-            "SELECT id FROM document WHERE dso_id=? AND hash=?",
+            "SELECT id, source, source_document_id FROM document WHERE dso_id=? AND hash=?",
             (row["dso_id"], digest),
         ).fetchone()
         if existing is not None and existing["id"] != row["id"]:
             if row["hash"] is None:
+                if (
+                    row["source"] == existing["source"] == "vnbdigital"
+                    and row["source_document_id"]
+                    and row["source_document_id"] == existing["source_document_id"]
+                ):
+                    connection.execute(
+                        "UPDATE document SET source_url=?, version=COALESCE(?, version), "
+                        "source_publication_status=COALESCE(?, source_publication_status), "
+                        "updated_at=? WHERE id=?",
+                        (
+                            row["source_url"],
+                            row["version"],
+                            row["source_publication_status"],
+                            now(),
+                            existing["id"],
+                        ),
+                    )
                 connection.execute("DELETE FROM document WHERE id=?", (row["id"],))
             return existing["id"], False
         if row["hash"] == digest:
@@ -228,8 +287,8 @@ def record_download(
             document_id = connection.execute(
                 "INSERT INTO document(dso_id, created_by_run_id, title, source_document_id, "
                 "hash, source_url, source, version, current_to, nap_year, "
-                "file_path, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "source_publication_status, file_path, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 (
                     row["dso_id"],
                     run_id,
@@ -241,6 +300,7 @@ def record_download(
                     row["version"],
                     row["current_to"],
                     row["nap_year"],
+                    row["source_publication_status"],
                     relative,
                     stamp,
                     stamp,
@@ -275,7 +335,9 @@ def documents_for_extraction(
     if not force:
         query += " AND NOT EXISTS (SELECT 1 FROM extract_table e "
         query += "WHERE e.document_id=d.id AND e.tool=? AND e.extract_is_archived=0)"
-        parameters.append(tool)
+        query += " AND NOT EXISTS (SELECT 1 FROM extraction_artifact a "
+        query += "WHERE a.document_id=d.id AND a.tool=?)"
+        parameters.extend((tool, tool))
     if provider is not None:
         query += " AND v.slug=?"
         parameters.append(provider)
@@ -327,7 +389,8 @@ def store_extraction(
     """
     metadata = json.loads((output / "metadata.json").read_text(encoding="utf-8"))
     tables = metadata["tables"]
-    if not tables:
+    native = output / "result" / "nap"
+    if not tables and not (native / "output.md").is_file():
         return 0
     source = f"{document_id}/{tool}/{script_hash[:12]}/{metadata['generated_at']}"
     source_key = hashlib.sha256(source.encode()).hexdigest()[:12]
@@ -336,14 +399,33 @@ def store_extraction(
         f"{metadata['source_sha256'][:16]}/{tool}/{source_key}"
     )
     native_files: list[dict[str, str]] = []
-    native = output / "result" / "nap"
+    markdown_hash = None
     if native.is_dir():
         for path in sorted(native.rglob("*")):
             if path.is_file():
                 relative = f"{base}/native/{path.relative_to(native).as_posix()}"
                 digest = write_bytes(root, relative, path.read_bytes())
                 native_files.append({"path": relative, "hash": digest})
+                if path == native / "output.md":
+                    markdown_hash = digest
     with connect(database) as connection:
+        artifact_id = None
+        if markdown_hash:
+            artifact_id = connection.execute(
+                "INSERT INTO extraction_artifact"
+                "(document_id, kind, file_path, hash, tool, created_at) "
+                "VALUES (?, 'markdown', ?, ?, ?, ?) ON CONFLICT(document_id, file_path) "
+                "DO UPDATE SET hash=excluded.hash RETURNING id",
+                (
+                    document_id,
+                    f"{base}/native/output.md",
+                    markdown_hash,
+                    tool,
+                    metadata["generated_at"],
+                ),
+            ).fetchone()[0]
+        if not tables:
+            return 0
         connection.execute(
             "UPDATE extract_table SET extract_is_archived=1, is_selected=0 "
             "WHERE document_id=? AND tool=? AND extract_is_archived=0",
@@ -361,12 +443,13 @@ def store_extraction(
             if native_files:
                 notes["native_files"] = native_files
             connection.execute(
-                "INSERT INTO extract_table(document_id, tool, table_number, "
+                "INSERT INTO extract_table(document_id, artifact_id, tool, table_number, "
                 "page_table_index, pages, regions, extract_table_hash, extract_table_path, "
                 "extract_table_notes, extract_script, extract_script_hash, extract_created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     document_id,
+                    artifact_id,
                     tool,
                     table["table_number"],
                     table["table_number"],

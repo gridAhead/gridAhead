@@ -32,6 +32,9 @@ SCHEMA_FINGERPRINTS = {
     21: "02968b3fc4d561ca64ceeb34721baccfd12c6b9d63b649c69aee9c8fc4f6d617",
     # 22: document.is_compact_sheet and its partial unique index.
     22: "a9037f25d2fe7732b0839c567a70a79442299aa0f0e32fe66087e0a4e87d8ad6",
+    # 23: document.source_publication_status.
+    23: "7f983bf0fac659067b352956ef954bd3f31a706c11965846ba9ea923782a7cf7",
+    24: "9df846c4eaa9f67dbb5fc1e28a83070a7d8dfd3a258c7da3c133eb69f0305f9a",
 }
 
 NEWER = (DB_VERSION + 1, "update nap_tool")
