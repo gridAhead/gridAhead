@@ -12,7 +12,7 @@ import { useHarmonizeSets } from './harmonizeSets'
 import { AppHeader } from './AppHeader'
 
 type Scheme = { initial_set_id: number | null; id: number; name: string; has_output: boolean; output_is_stale: boolean; fields: { key: string; title: string }[] }
-type Metric = { name: string; dso: string; value: number | null; empty_share?: number | null; empty_count?: number; row_count?: number; expected?: string; status: string }
+type Metric = { name: string; dso: string; note?: string; uncovered_cells?: number; value: number | null; empty_share?: number | null; empty_count?: number; row_count?: number; expected?: string; status: string }
 type Report = { nap_round: number; status: string; rows: number; record_types: Record<string, number>; coverage: Record<string, number>; metrics: Metric[]; [key: string]: unknown }
 type Status = { has_output: boolean; stale: boolean; reason: string; report: Report | null }
 type Preview = { header: string[]; derived: string[]; rows: string[][]; total_rows: number; page_size: number; options: Record<string, string[]> }
@@ -78,7 +78,7 @@ export function ClassifyPage() {
 
   useEffect(() => {
     setRowDetails(null)
-    if (!status?.has_output || tab === 'report') return
+    if (!status?.has_output || tab === 'report' || tab === 'compact') return
     const controller = new AbortController()
     const query = new URLSearchParams({ ...filters, set_id: String(setId), page: String(page), view: tab })
     request<Preview>(`/api/classify/schemes/${schemeId}/preview?${query}`, 'GET', controller.signal)
@@ -146,7 +146,7 @@ export function ClassifyPage() {
         <div className="classify-coverage">{[['inferred_asset_type', t("Asset type")], ['inferred_grid_level', t("Grid level")], ['inferred_measure_type', t("Measure type")]].map(([key, label]) => <span key={key}>{label} <b>{key in report.coverage ? `${(report.coverage[key] * 100).toFixed(1)}${t("%")}` : '—'}</b></span>)}</div>
       </div>}
       <div className="classify-workbar">
-        <nav className="classify-tabs" aria-label={t("Classification views")}>{[['data', t("Classified data")], ['report', t("Validation report")], ['unmapped', t("Unmapped values")]].map(([key, title]) => <button key={key} type="button" aria-pressed={tab === key} onClick={() => { setTab(key); setPage(1); setFilters({}); setRowDetails(null) }}>{title}</button>)}</nav>
+        <nav className="classify-tabs" aria-label={t("Classification views")}>{[['data', t("Classified data")], ['report', t("Validation report")], ['compact', t("Compact sheet check")], ['unmapped', t("Unmapped values")]].map(([key, title]) => <button key={key} type="button" aria-pressed={tab === key} onClick={() => { setTab(key); setPage(1); setFilters({}); setRowDetails(null) }}>{title}</button>)}</nav>
         {status?.has_output && <div className="classify-tools">
           <label className="classify-search"><Search size={14} /><input aria-label={t("Search classification results")} placeholder={t("Search results")} value={filters.q || ''} onChange={event => filterBy('q', event.target.value)} /></label>
           {tab === 'data' && <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)}><ListFilter size={14} />{t("Filter")}{activeFilters > 0 && <span className="classify-filter-count">{activeFilters}</span>}</button>}
@@ -175,7 +175,8 @@ export function ClassifyPage() {
         </table>
         {Object.entries(report).filter(([key]) => !['metrics', 'status', 'rows'].includes(key)).map(([key, value]) => <details key={key}><summary>{key}</summary><pre>{JSON.stringify(value, null, 2)}</pre></details>)}
       </>}
-      {tab !== 'report' && status?.has_output && <>
+      {tab === 'compact' && report && <CompactSheetCheck report={report} query={query} />}
+      {tab !== 'report' && tab !== 'compact' && status?.has_output && <>
         {tab === 'data' && filtersOpen && <div className="classify-filters">
           {[['dso', t("DSO")], ['record_type', t("Record type")], ['asset_type', t("Asset type")], ['measure_type', t("Measure type")], ['flag', t("Flags")]].map(([key, label]) => <label key={key}><span>{label}</span><select value={filters[key] || ''} onChange={event => filterBy(key, event.target.value)}><option value="">{t("All ")}</option>{(preview?.options[optionColumns[key] || key] || []).map(value => <option key={value} value={value}>{value}</option>)}</select></label>)}
           <button type="button" onClick={clearFilters}>{t("Clear filters")}</button>
@@ -192,6 +193,39 @@ export function ClassifyPage() {
     </main>
     {source !== null && <SourceDialog value={source} onClose={() => setSource(null)} />}
   </div>
+}
+
+type Deviation = { dso: string; subgrid_area: string; grid_level: string; planning_horizon: string; category_group: string; quantity: string; expected: number; actual: number; deviation_percent: number | null; status: string }
+type Unmatched = { dso: string; side: string; subgrid_area: string }
+
+/** One row per DSO with its compact sheet status; expands to the non-pass cells and unmatched subgrid areas. */
+function CompactSheetCheck({ report, query }: { report: Report; query: string }) {
+  const metrics = report.metrics.filter(item => item.name === 'compact_sheet')
+  const deviations = (report.compact_sheet_deviations || []) as Deviation[]
+  const unmatched = (report.unmatched_subgrid_areas || []) as Unmatched[]
+  const unassigned = Object.fromEntries(((report.unassigned_planning_horizons || []) as { dso: string; count: number }[]).map(item => [item.dso, item.count]))
+  const documents = (report.compact_sheet_documents || {}) as Record<string, number | null>
+  if (!('compact_sheet_deviations' in report)) return <p>{t("This report was created before the compact sheet check existed; rerun classification.")}</p>
+  if (!Object.keys(documents).length) return <p>{t("No DSO has a compact sheet marked for this round.")}</p>
+  const rows = metrics.filter(item => item.status !== 'empty' && (!query || item.dso.toLowerCase().includes(query)))
+  return <table className="classify-report">
+    <thead><tr><th>{t("DSO")}</th><th>{t("Status")}</th><th>{t("Sheet")}</th><th>{t("Non-pass cells")}</th><th>{t("Unassigned planning horizons")}</th></tr></thead>
+    <tbody>{rows.map(item => {
+      const mine = deviations.filter(entry => entry.dso === item.dso)
+      const missing = unmatched.filter(entry => entry.dso === item.dso)
+      return <tr key={item.dso}><td colSpan={5}>
+        <details><summary className="classify-compact-row">
+          <b>{item.dso}</b> <span className={`classify-${item.status}`}>{item.status}</span>
+          <span> · #{documents[item.dso] ?? '—'} · {t("Non-pass cells")}: {mine.length} · {t("Uncovered cells")}: {item.uncovered_cells || 0} · {t("Unassigned planning horizons")}: {unassigned[item.dso] || 0}</span>
+          {item.note && <span> · {String(item.note)}</span>}
+        </summary>
+          {mine.length > 0 && <table className="classify-report"><thead><tr>{[t("Subgrid area"), t("Grid level"), t("Planning horizon"), t("Category group"), t("Quantity"), t("Expected"), t("Actual"), t("Deviation"), t("Status")].map(label => <th key={label}>{label}</th>)}</tr></thead>
+            <tbody>{mine.map((entry, index) => <tr key={index}><td>{entry.subgrid_area}</td><td>{entry.grid_level}</td><td>{entry.planning_horizon}</td><td>{entry.category_group}</td><td>{entry.quantity}</td><td>{entry.expected.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td><td>{entry.actual.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td><td>{entry.deviation_percent === null ? '∞' : `${entry.deviation_percent}${t("%")}`}</td><td className={`classify-${entry.status}`}>{entry.status}</td></tr>)}</tbody></table>}
+          {missing.length > 0 && <><h3>{t("Unmatched subgrid areas")}</h3><ul>{missing.map((entry, index) => <li key={index}>{entry.side === 'records' ? t("Records") : t("Sheet")}: {entry.subgrid_area}</li>)}</ul></>}
+        </details>
+      </td></tr>
+    })}{rows.length === 0 && <tr><td colSpan={5}>{t("No matching metrics.")}</td></tr>}</tbody>
+  </table>
 }
 
 /** Column header with a select for known options, otherwise a contains-search field. */

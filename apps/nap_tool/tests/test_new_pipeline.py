@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -85,6 +86,70 @@ def test_discover_download_and_force_version(tmp_path: Path) -> None:
             ).fetchone()[0]
             == 0
         )
+
+
+def test_vnbdigital_rediscovery_after_url_change(tmp_path: Path) -> None:
+    """Moving a file updates its URL without queueing the downloaded bytes again."""
+    database = tmp_path / "nap_tool.sqlite"
+    original = Candidate("vnb", "VNB", "vnbdigital", "id-1", "NAP.pdf", "https://example.org/old")
+    moved = replace(original, source_url="https://example.org/new")
+    assert store_candidates(database, [original, moved]) == (1, 1)
+    [pending] = documents_for_download(database, None, None, False)
+    assert pending["source_url"] == moved.source_url
+    content = b"%PDF-1.4\nreport"
+    run_id = create_download_run(database, "download")
+    document_id, _ = record_download(database, tmp_path, pending, content, run_id)
+
+    # The first discovery after a legacy import can also supply the missing version.
+    latest = replace(moved, source_url="https://example.org/latest", version="2026-11-19")
+    assert store_candidates(database, [latest, latest]) == (0, 2)
+    assert documents_for_download(database, None, None, False) == []
+    [stored] = documents_for_download(database, None, None, True)
+    assert stored["id"] == document_id
+    assert stored["source_url"] == latest.source_url
+    assert checked_file(tmp_path, stored["file_path"], stored["hash"]).read_bytes() == content
+
+    revised = replace(latest, version="2026-11-20")
+    assert store_candidates(database, [revised]) == (1, 0)
+    [pending] = documents_for_download(database, None, None, False)
+    assert record_download(database, tmp_path, pending, content, run_id) == (document_id, False)
+    assert store_candidates(database, [revised]) == (0, 1)
+    assert documents_for_download(database, None, None, False) == []
+
+    new_file = replace(revised, source_document_id="id-2")
+    assert store_candidates(database, [new_file]) == (1, 0)
+    [pending] = documents_for_download(database, None, None, False)
+    assert pending["source_document_id"] == "id-2"
+
+
+def test_publication_status_tracks_source_without_downloading_again(tmp_path: Path) -> None:
+    """A changed source label survives a missing label and leaves downloaded bytes intact."""
+    database = tmp_path / "nap_tool.sqlite"
+    draft = Candidate(
+        "vnb",
+        "VNB",
+        "vnbdigital",
+        "file",
+        "NAP.pdf",
+        "https://example.org/nap.pdf",
+        source_publication_status="DRAFT",
+    )
+    assert store_candidates(database, [draft]) == (1, 0)
+    [pending] = documents_for_download(database, None, None, False)
+    assert pending["source_publication_status"] == "DRAFT"
+    run_id = create_download_run(database, "download")
+    record_download(database, tmp_path, pending, b"%PDF-first", run_id)
+
+    final = replace(draft, source_publication_status="FINAL")
+    unknown = replace(draft, source_publication_status=None)
+    assert store_candidates(database, [final, unknown]) == (0, 2)
+    assert documents_for_download(database, None, None, False) == []
+    [stored] = documents_for_download(database, None, None, True)
+    assert stored["id"] == pending["id"]
+    assert stored["source_publication_status"] == "FINAL"
+    record_download(database, tmp_path, stored, b"%PDF-revised", run_id)
+    [revised] = documents_for_download(database, None, None, True)
+    assert revised["source_publication_status"] == "FINAL"
 
 
 def test_extraction_creates_new_version_without_deleting_review(tmp_path: Path) -> None:

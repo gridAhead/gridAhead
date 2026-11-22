@@ -35,6 +35,7 @@ class NAPCandidate(TypedDict):
     source_url: str
     version: str | None
     nap_year: int | None
+    source_publication_status: str | None
 
 
 class _LinkParser(HTMLParser):
@@ -275,6 +276,7 @@ def _latest_vnbdigital_candidates(graphql_url: str) -> list[NAPCandidate]:
             continue
         newest = max(reports, key=_report_score)
         metadata = newest["metadata"]
+        status = metadata.get("version")
         published = metadata.get("publicationAt") or newest.get("uploadDate")
         candidates.append(
             {
@@ -286,6 +288,9 @@ def _latest_vnbdigital_candidates(graphql_url: str) -> list[NAPCandidate]:
                 "source_url": _with_preview(newest["url"]),
                 "version": _iso_timestamp(published) if isinstance(published, int) else None,
                 "nap_year": _nap_year(metadata),
+                "source_publication_status": status
+                if isinstance(status, str) and status.strip()
+                else None,
             }
         )
     if active and not candidates:

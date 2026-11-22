@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -36,8 +37,9 @@ def overview_client(tmp_path: Path) -> TestClient:
         )
         connection.execute(
             "INSERT INTO document(id, dso_id, title, hash, source, file_path, "
-            "created_at, updated_at) VALUES (5, 1, 'NAP.pdf', ?, 'custom', "
-            "'pdf/avacon/doc.pdf', '2026-01-01', '2026-01-01')",
+            "source_publication_status, created_at, updated_at) "
+            "VALUES (5, 1, 'NAP.pdf', ?, 'custom', "
+            "'pdf/avacon/doc.pdf', 'DRAFT', '2026-01-01', '2026-01-01')",
             ("a" * 64,),
         )
         for table_id, tool, table_type in ((11, "docling", None), (12, "llmPDF", 1)):
@@ -79,6 +81,7 @@ def test_overview_hierarchy_and_filters(overview_client: TestClient) -> None:
     assert vnbs[0]["document_count"] == 1
     documents = overview_client.get("/api/overview/documents?vnb=avacon").json()
     assert [item["id"] for item in documents] == [5]
+    assert documents[0]["source_publication_status"] == "DRAFT"
     filtered = overview_client.get(
         "/api/overview/extract-tables?document_id=5&tool=llmPDF&table_type=1"
     ).json()
@@ -163,6 +166,9 @@ def test_documents_filter_by_report_year_across_vnbs(
 
     all_documents = overview_client.get("/api/overview/documents").json()
     assert len(all_documents) == 4
+    assert all(
+        item["source_publication_status"] is None for item in all_documents if item["id"] != 5
+    )
     assert {item["id"]: item["year"] for item in all_documents} == {
         5: None,
         6: 2024,
@@ -210,7 +216,7 @@ def test_schema_describes_current_tables_and_relationships(
     assert response.status_code == 200
     payload = response.json()
     tables = {table["name"]: table for table in payload["tables"]}
-    assert len(tables) == 12
+    assert len(tables) == 13
     assert "settings" not in {column["name"] for column in tables["harmonize_field"]["columns"]}
     assert tables["document"]["row_count"] == 1
     assert any(
@@ -226,11 +232,38 @@ def test_schema_describes_current_tables_and_relationships(
         ("harmonize_scheme", "harmonize_set", "foreign_key"),
         ("dso", "document", "foreign_key"),
         ("document", "extract_table", "foreign_key"),
+        ("document", "extraction_artifact", "foreign_key"),
+        ("extraction_artifact", "extract_table", "foreign_key"),
         ("extract_table", "clean_table", "foreign_key"),
         ("extract_table", "harmonize_field_source", "foreign_key"),
         ("clean_table", "harmonize_field_source", "foreign_key"),
         ("harmonize_field", "harmonize_field_source", "foreign_key"),
     }
+
+
+def test_markdown_artifacts_link_to_one_pdf(overview_client: TestClient, tmp_path: Path) -> None:
+    """Serve verified Markdown and reject links to tables from another document."""
+    relative = "extracted/avacon/report.md"
+    digest = write_bytes(tmp_path, relative, b"# Report")
+    with connect(tmp_path / "nap_tool.sqlite") as connection:
+        artifact = connection.execute(
+            "INSERT INTO extraction_artifact(document_id, kind, file_path, hash) "
+            "VALUES (5, 'markdown', ?, ?) RETURNING id",
+            (relative, digest),
+        ).fetchone()[0]
+        connection.execute("UPDATE extract_table SET artifact_id=?", (artifact,))
+        with pytest.raises(sqlite3.IntegrityError, match="source document"):
+            connection.execute("UPDATE extract_table SET document_id=1234")
+    listing = overview_client.get("/api/overview/documents/5/artifacts").json()
+    assert [item["id"] for item in listing] == [artifact]
+    assert (
+        overview_client.get("/api/overview/extract-tables?document_id=5").json()[0]["artifact_id"]
+        == artifact
+    )
+    path = f"/api/overview/artifacts/{artifact}/text"
+    assert overview_client.get(path).content == b"# Report"
+    (tmp_path / relative).write_bytes(b"changed")
+    assert overview_client.get(path).status_code == 409
 
 
 def test_document_pdf_opens_only_verified_file(overview_client: TestClient, tmp_path: Path) -> None:

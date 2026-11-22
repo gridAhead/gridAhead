@@ -107,7 +107,9 @@ type Document = {
   vnb_name: string
   version: string | null
   source: string
+  source_publication_status: string | null
   is_selected: number
+  is_compact_sheet: number
   is_downloaded: number
   file_type: string | null
   extract_count: number
@@ -146,7 +148,35 @@ function DocumentYearEditor({ item, onSaved }: { item: Document; onSaved: () => 
   </form>
 }
 
+function CompactSheetToggle({ item, onSaved }: { item: Document; onSaved: () => void }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  if (item.file_type !== 'xlsx' || item.year === null) return null
+  async function toggle() {
+    setSaving(true); setError('')
+    try {
+      const response = await fetch(`/api/overview/documents/${item.id}/compact-sheet`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_compact_sheet: !item.is_compact_sheet, expected_updated_at: item.updated_at }),
+      })
+      const result = await response.json() as { detail?: string }
+      if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : t("Could not save compact sheet"))
+      onSaved()
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Could not save compact sheet")) }
+    finally { setSaving(false) }
+  }
+  return <>
+    <button type="button" className="document-year-edit" aria-pressed={Boolean(item.is_compact_sheet)} disabled={saving} onClick={() => void toggle()}>
+      <FileText size={13} />{item.is_compact_sheet ? t("Compact sheet (click to unmark)") : t("Mark as compact sheet")}
+    </button>
+    {error && <small role="alert">{t(error)}</small>}
+  </>
+}
+
+type MarkdownArtifact = { id: number; tool: string | null; created_at: string | null }
+
 type ExtractTable = {
+  artifact_id: number | null
   id: number
   document_id: number
   document_title: string
@@ -426,6 +456,11 @@ function App() {
 
   const vnbs = useResource<Vnb[]>(`/api/overview/dsos?revision=${dsoRevision}`)
   const documents = useResource<Document[]>(`/api/overview/documents?revision=${documentRevision}`)
+  const artifacts = useResource<MarkdownArtifact[]>(
+    route.document && route.extractScope === 'same'
+      ? `/api/overview/documents/${route.document}/artifacts?revision=${reviewRevision}`
+      : null,
+  )
   const extracts = useResource<ExtractTable[]>(
     route.extractScope === 'all' || route.document
       ? `/api/overview/extract-tables?${route.extractScope === 'same' && route.document ? `document_id=${route.document}&` : ''}tool=${route.tool}&table_type=${route.tableType}&revision=${reviewRevision}`
@@ -566,6 +601,7 @@ function App() {
                       {(route.documentVnb === 'all' || !route.vnb) && <span className="document-vnb-name">{item.vnb_name}</span>}
                       <span className="badge-line">
                         <StatusBadge tone={item.is_downloaded ? 'success' : 'warning'}>{item.is_downloaded ? t("Downloaded") : t("Pending download")}</StatusBadge>
+                        <StatusBadge tone="neutral">{t("Publication: {0}", item.source_publication_status ?? t("Unknown"))}</StatusBadge>
                         {!item.is_downloaded ? (
                           <StatusBadge tone="neutral">{t("Candidate document")}</StatusBadge>
                         ) : item.is_selected ? (
@@ -582,6 +618,7 @@ function App() {
                       {Boolean(item.is_downloaded) && ['md', 'markdown', 'txt'].includes(item.file_type || '') && <a className="document-open-pdf" href={`/api/overview/documents/${item.id}/text`} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /> {t(" Open Markdown")}</a>}
                     </div>
                     <DocumentYearEditor item={item} onSaved={() => setDocumentRevision(value => value + 1)} />
+                    <CompactSheetToggle item={item} onSaved={() => setDocumentRevision(value => value + 1)} />
                   </div>
                 ))}
               </div>
@@ -599,6 +636,15 @@ function App() {
               </select><ChevronDown size={12} aria-hidden="true" />
             </span>}
           >
+            {artifacts.error && <p role="alert">{artifacts.error}</p>}
+            {artifacts.data?.map(artifact => (
+              <div className="document-open-actions" key={artifact.id}>
+                <a className="document-open-pdf" href={`/api/overview/artifacts/${artifact.id}/text`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink size={13} /> {t(" Open Markdown")}
+                  {artifacts.data!.length > 1 && ` #${artifact.id}${artifact.tool ? ' · ' + artifact.tool : ''}${artifact.created_at ? ' · ' + artifact.created_at : ''}`}
+                </a>
+              </div>
+            ))}
             <div className="filter-block">
               <label className="filter-field">
                 <span className="filter-label">{t("Extraction tool")}</span>
@@ -650,6 +696,9 @@ function App() {
                       </button>
                       <div className="extract-card-footer">
                         <span className="item-meta"><span>{item.first_page ? t(" {0}  page", item.first_page) : t("Page unknown")}</span><span>{item.is_stale ? t("Review source changed") : item.is_confirmed ? t("Extraction reviewed") : t("Pending review")}</span><span>{item.clean_count} {t("  cleaned versions")}</span></span>
+                        {item.artifact_id && (route.extractScope === 'all' || (artifacts.data?.length ?? 0) > 1) && (
+                          <a className="document-open-pdf" href={`/api/overview/artifacts/${item.artifact_id}/text`} target="_blank" rel="noopener noreferrer">Markdown #{item.artifact_id}</a>
+                        )}
                         <button className="extract-review-button" type="button" onClick={() => navigate({ vnb: item.dso_slug, documentVnb: 'same', document: item.document_id, extract: item.id, clean: undefined, view: 'review' })}>{t("Manual review ")}<ArrowRight size={13} /></button>
                       </div>
                     </div>

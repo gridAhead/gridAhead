@@ -66,6 +66,11 @@ class DocumentYearUpdate(BaseModel):
     expected_updated_at: str
 
 
+class CompactSheetUpdate(BaseModel):
+    is_compact_sheet: bool
+    expected_updated_at: str
+
+
 class DsoIdentifiersUpdate(BaseModel):
     """Official identifiers for one electricity network operator."""
 
@@ -270,6 +275,7 @@ def create_app(root: Path | None = None) -> FastAPI:
             "download_run",
             "dso",
             "document",
+            "extraction_artifact",
             "extract_table",
             "table_type",
             "extract_table_type",
@@ -398,6 +404,7 @@ def create_app(root: Path | None = None) -> FastAPI:
                 raise HTTPException(status_code=404, detail="DSO not found")
             rows = connection.execute(
                 "SELECT d.id, d.title, d.version, d.nap_year, d.source, d.is_selected, "
+                "d.source_publication_status, d.is_compact_sheet, "
                 "d.file_path IS NOT NULL AS is_downloaded, d.file_path, "
                 "d.created_at, d.updated_at, "
                 "v.slug AS dso_slug, v.name AS vnb_name, "
@@ -437,6 +444,50 @@ def create_app(root: Path | None = None) -> FastAPI:
                 (request.nap_year, stamp, document_id),
             )
         return {"id": document_id, "year": request.nap_year, "updated_at": stamp}
+
+    @app.patch("/api/overview/documents/{document_id}/compact-sheet")
+    def update_document_compact_sheet(
+        document_id: int, request: CompactSheetUpdate
+    ) -> dict[str, object]:
+        """Mark or unmark a document as its DSO's compact sheet for its NAP round.
+
+        Marking replaces the DSO's previous compact sheet of the same round.
+        """
+        with connect(repository / "nap_tool.sqlite") as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT dso_id, nap_year, file_path, updated_at FROM document WHERE id=?",
+                (document_id,),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Document not found")
+            if row["updated_at"] != request.expected_updated_at:
+                raise HTTPException(
+                    status_code=409, detail="Document changed; reload before saving"
+                )
+            if request.is_compact_sheet and (
+                row["nap_year"] is None or _file_type(row["file_path"]) != "xlsx"
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Only an XLSX document with a NAP round can be a compact sheet",
+                )
+            stamp = datetime.now(timezone.utc).isoformat()
+            if request.is_compact_sheet:
+                connection.execute(
+                    "UPDATE document SET is_compact_sheet=0, updated_at=? "
+                    "WHERE dso_id=? AND nap_year=? AND is_compact_sheet=1 AND id<>?",
+                    (stamp, row["dso_id"], row["nap_year"], document_id),
+                )
+            connection.execute(
+                "UPDATE document SET is_compact_sheet=?, updated_at=? WHERE id=?",
+                (int(request.is_compact_sheet), stamp, document_id),
+            )
+        return {
+            "id": document_id,
+            "is_compact_sheet": request.is_compact_sheet,
+            "updated_at": stamp,
+        }
 
     @app.get("/api/overview/documents/{document_id}/pdf")
     def document_pdf(document_id: int) -> FileResponse:
@@ -518,6 +569,36 @@ def create_app(root: Path | None = None) -> FastAPI:
             path, media_type="text/plain; charset=utf-8", content_disposition_type="inline"
         )
 
+    @app.get("/api/overview/documents/{document_id}/artifacts")
+    def document_artifacts(document_id: int) -> list[dict[str, object]]:
+        """List Markdown conversions of the selected source document."""
+        with _read_database(repository) as connection:
+            return [
+                dict(row)
+                for row in connection.execute(
+                    "SELECT id, kind, tool, created_at FROM extraction_artifact "
+                    "WHERE document_id=? ORDER BY created_at DESC, id DESC",
+                    (document_id,),
+                )
+            ]
+
+    @app.get("/api/overview/artifacts/{artifact_id}/text")
+    def artifact_text(artifact_id: int) -> FileResponse:
+        """Show the verified conversion as inert UTF-8 text."""
+        with _read_database(repository) as connection:
+            row = connection.execute(
+                "SELECT file_path, hash FROM extraction_artifact WHERE id=? AND kind='markdown'",
+                (artifact_id,),
+            ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Markdown artifact not found")
+        path = _verified_file(repository, row["file_path"], row["hash"])
+        return FileResponse(
+            path,
+            media_type="text/plain; charset=utf-8",
+            headers={"X-Content-Type-Options": "nosniff"},
+        )
+
     @app.get("/api/overview/extract-tables")
     def extract_tables(
         document_id: int | None = Query(default=None, gt=0),
@@ -537,7 +618,7 @@ def create_app(root: Path | None = None) -> FastAPI:
             Extracted table summaries.
         """
         query = (
-            "SELECT e.id, e.document_id, e.tool, e.table_number, e.pages, "
+            "SELECT e.id, e.document_id, e.artifact_id, e.tool, e.table_number, e.pages, "
             "e.is_selected, et.table_type_id AS table_type, e.extract_is_confirmed, "
             "e.extract_is_archived, e.extract_reviewed_source_hash, "
             "e.extract_reviewed_table_path, "
@@ -582,6 +663,7 @@ def create_app(root: Path | None = None) -> FastAPI:
                 {
                     "id": row["id"],
                     "document_id": row["document_id"],
+                    "artifact_id": row["artifact_id"],
                     "document_title": row["document_title"],
                     "dso_slug": row["dso_slug"],
                     "vnb_name": row["vnb_name"],

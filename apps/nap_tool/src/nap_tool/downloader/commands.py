@@ -62,6 +62,7 @@ def discover(
                         source_url=item["source_url"],
                         version=item["version"],
                         nap_year=item["nap_year"],
+                        source_publication_status=item["source_publication_status"],
                     )
                 )
         for configured in config.providers:

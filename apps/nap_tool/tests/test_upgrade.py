@@ -60,7 +60,12 @@ def test_link_becomes_pointer(legacy: Path, kind: str) -> None:
             pytest.skip("creating symlinks needs Developer Mode or admin rights on Windows")
     else:
         link.write_text(f".versions/{GENERATION}", encoding="utf-8")
-    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 1})]
+    assert upgrade_repository(legacy) == [
+        (20, {"classification_pointers": 1}),
+        (21, {"document_columns_added": 0}),
+        (22, {"document_columns_added": 0}),
+        (23, {"markdown_artifacts": 0}),
+    ]
     assert _user_version(legacy / "nap_tool.sqlite") == DB_VERSION
     assert not os.path.lexists(link)
     assert (published_directory(set_directory, 1) / "classified.csv").is_file()
@@ -84,12 +89,22 @@ def test_bad_link_keeps_old_version_and_can_be_rerun(legacy: Path, target: str, 
     assert _user_version(legacy / "nap_tool.sqlite") == 20
     assert not (legacy / "classified/set_1/scheme_1.current").exists()
     link.write_text(f".versions/{GENERATION}", encoding="utf-8")
-    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 1})]
+    assert upgrade_repository(legacy) == [
+        (20, {"classification_pointers": 1}),
+        (21, {"document_columns_added": 0}),
+        (22, {"document_columns_added": 0}),
+        (23, {"markdown_artifacts": 0}),
+    ]
 
 
 def test_repository_without_classification_output(legacy: Path) -> None:
     """Only the version changes when nothing was classified yet."""
-    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 0})]
+    assert upgrade_repository(legacy) == [
+        (20, {"classification_pointers": 0}),
+        (21, {"document_columns_added": 0}),
+        (22, {"document_columns_added": 0}),
+        (23, {"markdown_artifacts": 0}),
+    ]
     assert _user_version(legacy / "nap_tool.sqlite") == DB_VERSION
 
 
@@ -114,7 +129,58 @@ def test_cli(legacy: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NAP_DATA_DIR", str(legacy))
     result = CliRunner().invoke(app, ["upgrade"])
     assert result.exit_code == 0, result.output
-    assert f"DB_VERSION 20 -> {DB_VERSION}" in result.output
+    assert f"DB_VERSION {DB_VERSION - 1} -> {DB_VERSION}" in result.output
     result = CliRunner().invoke(app, ["upgrade"])
     assert result.exit_code == 0, result.output
     assert "already current" in result.output
+
+
+def test_compact_sheet_column_is_added_to_a_version_21_database(tmp_path: Path) -> None:
+    """A database made before the column existed gets it, and a rerun changes nothing."""
+    path = _make_db(tmp_path, 21)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("DROP INDEX document_compact_sheet")
+        connection.execute("ALTER TABLE document DROP COLUMN is_compact_sheet")
+        connection.commit()
+    assert upgrade_repository(tmp_path) == [
+        (21, {"document_columns_added": 1}),
+        (22, {"document_columns_added": 0}),
+        (23, {"markdown_artifacts": 0}),
+    ]
+    with closing(sqlite3.connect(path)) as connection:
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(document)")]
+        connection.execute(
+            "INSERT INTO dso (name, slug, created_at, updated_at) VALUES ('a','a','','')"
+        )
+        for number in (1, 2):
+            connection.execute(
+                "INSERT INTO document (dso_id, title, source, nap_year, is_compact_sheet, "
+                "created_at, updated_at) VALUES (1, 't', 's', 2026, ?, '', '')",
+                (1 if number == 1 else 0,),
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("UPDATE document SET is_compact_sheet=1 WHERE id=2")
+    assert "is_compact_sheet" in columns
+
+
+def test_publication_status_upgrade_preserves_existing_documents(tmp_path: Path) -> None:
+    """An older repository gains the nullable label without guessing any existing status."""
+    path = _make_db(tmp_path, 22)
+    with closing(sqlite3.connect(path)) as connection, connection:
+        connection.execute("ALTER TABLE document DROP COLUMN source_publication_status")
+        connection.execute(
+            "INSERT INTO dso (name, slug, created_at, updated_at) VALUES ('a','a','','')"
+        )
+        connection.execute(
+            "INSERT INTO document (dso_id, title, source, version, created_at, updated_at) "
+            "VALUES (1, 'FINAL.pdf', 'vnbdigital', '2026-11-01', '', '')"
+        )
+    assert upgrade_repository(tmp_path) == [
+        (22, {"document_columns_added": 1}),
+        (23, {"markdown_artifacts": 0}),
+    ]
+    assert upgrade_repository(tmp_path) == []
+    with closing(sqlite3.connect(path)) as connection:
+        assert connection.execute(
+            "SELECT title, version, source_publication_status FROM document"
+        ).fetchone() == ("FINAL.pdf", "2026-11-01", None)

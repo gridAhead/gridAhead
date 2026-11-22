@@ -85,3 +85,65 @@ comes first. Cable designations (NKBA, NA2XS(F)2Y, NAYY …) count as cable.
 another level than the reported one (flag `voltage_other_level`). `line_or_cable` is
 refined to `overhead_line` or `cable` by `line_construction_type` (Freileitung,
 Erdkabel).
+
+## Compact sheet check
+
+Many DSOs publish a compact sheet (`Datenblatt vnbdigital.de`) whose km, MVA, station
+counts and costs are totals over their measure list. The check compares the classified
+records with these totals. It runs with the classification, for the NAP 2026 round only
+(`validation.compact_sheet` in `config/classify_2026.yaml`).
+
+**Marking.** `document.is_compact_sheet` marks one XLSX document per DSO and NAP round
+(overview documents list, `PATCH /api/overview/documents/{id}/compact-sheet`; marking a
+second document replaces the first). If the sheet is embedded in the measure workbook,
+mark the workbook. DSOs without a marked sheet get metric `compact_sheet` = `empty`.
+
+**Reading.** The marked workbook is read with `openpyxl` (cached values; the extracted
+table is not used). The sheet is the one whose `B1` starts with `Erwarteter
+Netzausbaubedarf bis 2045`. The template is located by its labels: the row with
+`Projektkategorie`, the horizon headers (`2025 bis 2030 (T+5)` …), the grid-level labels
+above them and the quantity headers (`Anzahl`, `MVA`, `Kilometer`, `geschätzter
+Bedarf`); a note row between horizon and quantity headers is skipped. A wrong or missing
+label gives the DSO `fail` with "unexpected layout" and nothing is parsed. Grid levels
+marked `Netzebene wird nicht betrieben`, or absent from the sheet, are not compared. Rows
+named `Teilnetzgebiet nicht benannt` are dropped, and the sheet's own totals are ignored:
+DSO totals are summed from the subgrid cells. Cells with units ("140 km", "3.0 Mio.
+Euro") are read as numbers. An explicit `0` means "no need", an empty cell is missing
+(`empty`, never a deviation).
+
+**Comparison.** Records are `measure` and `collective` rows of the round, without rows
+flagged `duplicate_of=`. The key is DSO × subgrid area × grid level (first entry of
+`inferred_grid_level`) × planning horizon (source column `planning_horizon`: `T+5`,
+`T+10`, `Zielnetz 2045`; anything else is counted as unassigned, never guessed from
+dates) × category group × quantity, and the same key as a DSO total.
+
+| Category group | `inferred_project_category` |
+| --- | --- |
+| Neubau | `new` |
+| Ersatz(neubau) mit Erhöhung; Netzoptimierung und -verstärkung | `replacement_increase`, `optimization` |
+| Reiner Ersatz (1:1) / Rückbau / Altlastentsorgung | `replacement_no_increase`, `dismantling` |
+
+- Lines (HV, MV, LV): km (`line_length_km`) and cost. Stations (EHV/HV, HV/MV, MV/LV):
+  MVA (`capacity_change_mva`), cost and station count.
+- Cost is `reported_amount_eur`; the sheet's `geschätzter Bedarf` is in Mio. EUR
+  (`cost_divisor`).
+- Station count is the number of `measure` records with `inferred_asset_class ==
+  station` (collective rows excluded). DSOs fill the count in by hand, so its status is at
+  worst `warn`.
+- Subgrid areas are matched after strip and casefold. Records without `subgrid_area` count
+  toward the DSO total only, unless the sheet names exactly one subgrid area. Names that
+  match nothing on either side are listed as `unmatched_subgrid_areas`; their records
+  still count toward the total.
+- A cell the sheet fills but to which no record contributes a value (the measure list has
+  no cost column, lists no measures for that horizon, …) is a coverage gap: the measure
+  list says nothing, so it is not a deviation. It counts as `empty` and is counted per DSO
+  in `uncovered_cells`. Only cells with contributing records can warn or fail. A DSO with
+  nothing comparable gets `empty`. The station count is always compared.
+- Tolerance on the relative deviation: pass ≤ 1 %, warn ≤ 10 %, else fail. An explicit 0
+  against a nonzero sum fails.
+
+**Report.** `validation_report.json` / `.md` carry one metric `compact_sheet` per DSO
+(worst cell status; value = number of non-pass cells), and the sections
+`compact_sheet_deviations` (non-pass cells only), `unmatched_subgrid_areas`,
+`unassigned_planning_horizons` and `compact_sheet_documents`. The classify page shows
+them in the tab **Kompaktblatt-Abgleich** (EN "Compact sheet check").

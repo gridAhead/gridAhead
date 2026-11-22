@@ -866,6 +866,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "filelock" },
+    { name = "openpyxl" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
@@ -907,6 +908,7 @@ requires-dist = [
     { name = "llama-cloud", marker = "extra == 'llamaparse'", specifier = ">=0.1" },
     { name = "llmpdf", marker = "extra == 'all-extractors'", specifier = "==0.7.1" },
     { name = "llmpdf", marker = "extra == 'llmpdf'", specifier = "==0.7.1" },
+    { name = "openpyxl", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
