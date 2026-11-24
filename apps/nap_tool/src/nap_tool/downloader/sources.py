@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TypedDict
 from urllib.error import URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
-from urllib.request import ProxyHandler, Request, build_opener
+from urllib.request import OpenerDirector, ProxyHandler, Request, build_opener
 
 from nap_tool.config import HubConfig, Provider, SourceType, VnbDigitalConfig
 
@@ -132,7 +132,7 @@ def download_vnbdigital_pdf(source_url: str) -> bytes:
     """
 
     try:
-        data = _read_url(source_url)
+        data = read_url(source_url)
     except OSError as exc:
         raise RuntimeError(f"Failed to download PDF: {exc.__class__.__name__}") from exc
     if not data:
@@ -165,7 +165,7 @@ def discover_configured(provider: Provider, hub: HubConfig | None) -> list[tuple
         if hub is None or provider.hub_match is None:
             raise ValueError(f"[{provider.slug}] hub source requires hub.url and hub_match")
         parser = _LinkParser()
-        parser.feed(_read_url(hub.url).decode("utf-8", errors="replace"))
+        parser.feed(read_url(hub.url).decode("utf-8", errors="replace"))
         return [
             (label or _filename_from_url(urljoin(hub.url, href)), urljoin(hub.url, href))
             for href, label in parser.links
@@ -178,7 +178,7 @@ def _download_from_hub(provider: Provider, hub: HubConfig, provider_dir: Path) -
     """Find labelled links on a shared hub page and download matching files."""
     if not provider.hub_match:
         raise ValueError(f"[{provider.slug}] hub source requires hub_match")
-    page = _read_url(hub.url).decode("utf-8", errors="replace")
+    page = read_url(hub.url).decode("utf-8", errors="replace")
     parser = _LinkParser()
     parser.feed(page)
     matching_urls = [
@@ -317,7 +317,7 @@ def _graphql_request(
         headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
     )
     try:
-        with _url_opener().open(request, timeout=90) as response:
+        with url_opener().open(request, timeout=90) as response:
             result = json.loads(response.read().decode("utf-8"))
     except URLError as exc:
         raise RuntimeError(f"VNBdigital GraphQL request failed: {exc.reason}") from exc
@@ -391,14 +391,29 @@ def _provider_slug(name: str) -> str:
     return normalized or "unknown-provider"
 
 
-def _read_url(url: str) -> bytes:
+def read_url(url: str) -> bytes:
+    """Download a URL with the tool's user agent, bypassing proxy variables.
+
+    Args:
+        url: URL to read.
+
+    Returns:
+        The response body.
+
+    Raises:
+        OSError: If the request fails (URLError and HTTPError included).
+    """
     request = Request(url, headers={"User-Agent": USER_AGENT})
-    with _url_opener().open(request, timeout=90) as response:
+    with url_opener().open(request, timeout=90) as response:
         return response.read()
 
 
-def _url_opener():
-    """Return an opener that connects directly instead of inheriting proxy variables."""
+def url_opener() -> OpenerDirector:
+    """Return an opener that connects directly instead of inheriting proxy variables.
+
+    Returns:
+        A urllib opener without proxy handling.
+    """
     return build_opener(ProxyHandler({}))
 
 
@@ -406,7 +421,7 @@ def _download_document(source_url: str, output_path: Path) -> dict[str, str | in
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = output_path.with_suffix(f"{output_path.suffix}.part")
     try:
-        data = _read_url(source_url)
+        data = read_url(source_url)
     except OSError as exc:
         raise RuntimeError(f"Failed to download {source_url}: {exc}") from exc
     if not data:

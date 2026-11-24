@@ -167,7 +167,7 @@ def test_discover_vnbdigital_returns_candidates_without_downloading(monkeypatch)
     monkeypatch.setattr(sources, "_latest_vnbdigital_candidates", lambda _url: [candidate])
     monkeypatch.setattr(
         sources,
-        "_read_url",
+        "read_url",
         lambda _url: (_ for _ in ()).throw(AssertionError("discovery downloaded a PDF")),
     )
 
@@ -187,7 +187,7 @@ def test_live_portal_still_lists_nap_reports() -> None:
 def test_download_vnbdigital_pdf_validates_bytes(monkeypatch) -> None:
     """Downloading a candidate returns validated bytes without writing files."""
 
-    monkeypatch.setattr(sources, "_read_url", lambda _url: b"%PDF-1.7")
+    monkeypatch.setattr(sources, "read_url", lambda _url: b"%PDF-1.7")
 
     assert sources.download_vnbdigital_pdf("https://example.test/nap.pdf") == b"%PDF-1.7"
 
@@ -217,7 +217,7 @@ def test_hub_download_rejects_non_http_links(monkeypatch, tmp_path: Path) -> Non
     secret.write_bytes(b"%PDF-1.7 secret")
     page = f'<a href="{secret.as_uri()}">Custom Grid</a>'.encode()
     monkeypatch.setattr(
-        sources, "_read_url", lambda url: page if url.startswith("https") else secret.read_bytes()
+        sources, "read_url", lambda url: page if url.startswith("https") else secret.read_bytes()
     )
     provider = Provider(
         name="Custom Grid",

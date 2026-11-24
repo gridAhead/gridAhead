@@ -24,10 +24,10 @@ from nap_tool.database.repository import (
     store_candidates,
 )
 from nap_tool.downloader.sources import (
-    _read_url,
     discover_configured,
     discover_vnbdigital,
     download_vnbdigital_pdf,
+    read_url,
 )
 from nap_tool.dso_identifiers import sync_dso_identifiers
 
@@ -132,7 +132,7 @@ def download(
             content = (
                 download_vnbdigital_pdf(row["source_url"])
                 if row["source"] == "vnbdigital"
-                else _read_url(row["source_url"])
+                else read_url(row["source_url"])
             )
             document_id, created = record_download(
                 root / "nap_tool.sqlite", root, row, content, run_id
