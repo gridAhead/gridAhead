@@ -16,3 +16,4 @@ A classification run writes a complete, immutable generation to `classified/set_
 - The current output is no longer browsable at `classified/set_<set>/scheme_<scheme>/`; open the pointer to find the generation.
 - Windows may refuse to replace a pointer that another process holds open; `data.replace_file` retries briefly, since readers hold it only while reading a few bytes.
 - The path layout changed, so DB_VERSION went from 20 to 21 (ADR-0003). `nap-tool upgrade` converts each `scheme_<scheme>` link, whether a symlink or a text file from a git checkout, into a pointer and then sets the new version; it is safe to rerun after a failure.
+- The mechanism lives in `nap_tool/generations.py` and is also used by the `geocoded/` stage (ADR-0007).

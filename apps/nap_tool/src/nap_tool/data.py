@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -137,6 +138,26 @@ def replace_file(source: Path, destination: Path, attempts: int = 20) -> None:
         except PermissionError:
             time.sleep(0.05)
     source.replace(destination)
+
+
+def atomic_write_bytes(path: Path, content: bytes) -> None:
+    """Write a file through a temporary file in its directory, replacing any existing one.
+
+    The parent directory must exist.
+
+    Args:
+        path: File to write.
+        content: Bytes to write.
+
+    Raises:
+        PermissionError: If the destination stays in use by another process.
+    """
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporary.write_bytes(content)
+        replace_file(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def checked_file(root: Path, relative: str, digest: str) -> Path:
