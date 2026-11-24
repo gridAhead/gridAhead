@@ -136,3 +136,20 @@ _Source term_: Betriebsmittel-Zuordnungscode
 **Grid level**:
 A voltage level or transformation level of the grid: EHV, EHV/HV, HV, HV/MV, MV, MV/LV, LV.
 _Source term_: Netzebene, Spannungsebene
+
+## Geocoding
+
+**Place data**:
+The offline list of municipalities and settlements with points (BKG GN250) that location
+names are matched against.
+_Avoid_: gazetteer, geocoder database, place list
+
+**OSM object**:
+A named substation or power plant of OpenStreetMap that a location name can be matched to.
+
+**Precision**:
+Whether a geocoded point is an object position or a settlement centre.
+
+**DSO anchor**:
+The median point of the places a DSO's measures name with exactly one exact match; needs at
+least `min_anchor_points` such places. Ambiguous names take the candidate nearest to it.

@@ -262,7 +262,7 @@ def test_malformed_pointer_is_refused(repository, content):
     root, _, _ = repository
     run(root, 1)
     (root / "classified/set_1/scheme_1.current").write_text(content, encoding="utf-8")
-    with pytest.raises(ValueError, match="Malformed classification pointer"):
+    with pytest.raises(ValueError, match="Malformed output pointer"):
         output_status(root, 1)
 
 

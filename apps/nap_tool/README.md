@@ -15,6 +15,7 @@ Documentation lives in the docs site:
 
 - [nap-tool](../docs/content/docs/nap-tool/index.mdx)
 - [Classification](../docs/content/docs/nap-tool/classification.md)
+- [Geocoding](../docs/content/docs/nap-tool/geocoding.md)
 - [NAP 2026 data facts](../docs/content/docs/nap-tool/nap-2026.md)
 
 Decisions and their reasons live in `docs/adr/`.

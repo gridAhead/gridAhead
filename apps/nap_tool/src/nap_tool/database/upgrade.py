@@ -17,9 +17,9 @@ from typing import Callable
 
 import typer
 
-from nap_tool.classifier.service import VERSIONS_DIR, is_generation, publish_pointer
 from nap_tool.data import data_dir
 from nap_tool.database.schema import DB_VERSION, require_version
+from nap_tool.generations import VERSIONS_DIR, is_generation, publish_pointer
 
 
 def upgrade() -> None:

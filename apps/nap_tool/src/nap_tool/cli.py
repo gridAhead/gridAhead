@@ -13,6 +13,7 @@ from nap_tool.database.migrate import migrate
 from nap_tool.database.upgrade import upgrade
 from nap_tool.downloader.commands import discover, download, sync_identifiers
 from nap_tool.extractor.commands import extract
+from nap_tool.geocoder.commands import geocode_command, place_data_app
 from nap_tool.ui.commands import ui
 
 app = typer.Typer(help="Discover, download, and extract grid extension plans.")
@@ -23,6 +24,8 @@ app.command(name="extract")(extract)
 app.command(name="migrate")(migrate)
 app.command(name="upgrade")(upgrade)
 app.command(name="classify")(classify_command)
+app.add_typer(place_data_app, name="place-data")
+app.command(name="geocode")(geocode_command)
 
 
 app.command(name="ui")(ui)

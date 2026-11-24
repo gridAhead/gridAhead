@@ -18,6 +18,11 @@ Coding standards: `CODING_STANDARDS.md`.
   (see `.env.example`). Committing and pushing `nap_data` is manual.
 - `uv sync --group dev`; extraction tools are extras (`docling`, `llmpdf`, `llamaparse`).
 - Check: `uv run ruff check . && uv run ruff format . && uv run pytest`.
+- Geocoding needs the place data: `uv run nap-tool place-data fetch` downloads BKG GN250 into
+  `$NAP_DATA_DIR/place_data/` (must be gitignored in nap_data, never committed; `place-data fetch`
+  warns if it is not; also ignore `/geocoded/` like `/classified/`; ADR-0007).
+- Optional OSM objects for more precise points: `uv run nap-tool place-data osm-fetch`
+  (public Overpass, run by hand; ODbL, ADR-0008).
 - Frontend (`src/nap_tool/ui/frontend/`): after changing `src/`, run
   `npm ci && npm run build && npm test` (Node ≥ 22) and commit the rebuilt bundle in
   `ui/static/`. If npm does not match Node:
@@ -35,6 +40,8 @@ Coding standards: `CODING_STANDARDS.md`.
 - Classification rules live in `config/classify*.yaml`; the written reference is
   `../docs/content/docs/nap-tool/classification.md`. Patterns on case-folded text use `ss`
   for `ß`.
+- Geocoding rules live in `config/geocode.yaml`; the written reference is
+  `../docs/content/docs/nap-tool/geocoding.md`.
 - Before working on NAP 2026 data, record keys, asset codes or validation, read
   `../docs/content/docs/nap-tool/nap-2026.md`.
 - `extract` offers only docling and llmPDF; `comparator/` and `database_ui/` are stale.

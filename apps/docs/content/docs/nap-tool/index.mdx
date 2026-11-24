@@ -25,6 +25,7 @@ The commands follow that shape:
 3. **Review and clean.** `nap-tool ui` serves the review UI, starting at `/ui/overview`. A reviewer confirms an extracted table, then a cleaned copy. Cleaning types the columns, normalizes units, and drops the rows the reviewer has marked.
 4. **Harmonize.** A set is the scope: one table type, a choice of operators, and a choice of NAP rounds. A scheme maps source columns onto one list of target fields and can be reused across sets. One set and one scheme produce one harmonized table.
 5. **Classify.** `classify` reads a harmonized grid-measure table and adds derived columns: record type, asset type, grid level, location, and a quality grade. The source columns stay as they are. Rules live in `config/classify.yaml`, and a single-year set picks up `config/classify_<year>.yaml`. See [Classification](/docs/nap-tool/classification).
+6. **Geocode.** `geocode` turns the start and end locations of classified measures into coordinates. It matches their names against offline place data (BKG GN250) and, if you fetched them, OpenStreetMap substations and plants, so a station can get its real position instead of its town's centre. See [Geocoding](/docs/nap-tool/geocoding).
 
 Details of the 2026 files that affect keys, asset codes, and validation are in [NAP 2026 data facts](/docs/nap-tool/nap-2026).
 
