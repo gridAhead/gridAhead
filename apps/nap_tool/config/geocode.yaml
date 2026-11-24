@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut
+# SPDX-FileCopyrightText: 2026 Jonathan Amme <https://github.com/nesnoj> © Reiner Lemoine Institut
+# SPDX-FileCopyrightText: 2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Offline place data: BKG GN250, dl-de/by-2-0. Downloaded by `nap-tool place-data fetch`
+# into $NAP_DATA_DIR/place_data/ (gitignored in nap_data).
+place_data:
+  url: https://daten.gdz.bkg.bund.de/produkte/sonstige/gn250/aktuell/gn250.utm32s.csv.zip
+  member: gn250/GN250.csv
+  object_classes: [AX_Gemeinde, AX_Ortslage]
+matching:
+  # A trailing word from this list is removed in step strip_suffix ("Musterdorf Nord").
+  suffix_words: [nord, süd, ost, west, mitte, nordost, nordwest, südost, südwest, zentrum]
+  # Ambiguous names: nearest candidate to the DSO anchor, if within this distance.
+  max_anchor_km: 100
+  # Fewest unambiguous places a DSO needs for an anchor.
+  min_anchor_points: 3
+
+# OSM grid objects (run `nap-tool place-data osm-fetch` by hand; ODbL, see ADR-0008).
+osm:
+  overpass_url: https://overpass-api.de/api/interpreter
+  # OSM power=* values that are stored.
+  classes: [substation, plant]
+  # Location kind (from classification) -> classes it may match.
+  kinds:
+    substation: [substation]
+    switching_station: [substation]
+    local_substation: [substation]
+    place: [plant]
+    search_area: [plant]
+  # These kinds use OSM only when the settlement lookup found nothing.
+  rescue_only_kinds: [place, search_area]
+  # Words removed from both names before comparing ("Umspannwerk Waren" -> "waren").
+  strip_words: [umspannwerk, umspannanlage, umspannstation, schaltanlage, schaltstation, schaltwerk, kraftwerk, heizkraftwerk, windpark, solarpark, uw, ua, hkw]
+  # Words of the DSO name that say nothing about the operator tag.
+  operator_stop_words: [gmbh, mbh, ag, kg, co, und, netz, netze, netzgesellschaft, netzservice, energie, energienetze, stadtwerke, verteilnetz, verteilnetze]
+  max_km: 15
