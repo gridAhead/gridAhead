@@ -259,3 +259,119 @@ def test_a_proposal_for_a_record_of_another_set_keeps_the_output_fresh(root):
             "evidence_quote) VALUES (1,'start','Albbruck','place','measure_name','Albbruck')"
         )
     assert not output_status(root, 1)["stale"]
+
+
+def rows(*options: str) -> list[dict]:
+    """Run `nap-tool propose rows` and return its JSON lines."""
+    result = CliRunner().invoke(
+        app, ["propose", "rows", "--set-id", "1", "--scheme-id", "1", *options]
+    )
+    assert result.exit_code == 0, result.output
+    return [json.loads(line) for line in result.stdout.splitlines()]
+
+
+def test_rows_emits_a_measure_without_location_as_its_reading_package(root):
+    classified(root)
+    assert rows() == [
+        {
+            "row_id": "1-2",
+            "dso_mastr_nr": "ABC",
+            "asset_class": "line",
+            "grid_level": "MV",
+            "measure_name": "Neubau 20 kV Kabel",
+            "measure_description": "Kabelneubau",
+            "upstream_grid_node": "UW Albbruck",
+            "location_start": "",
+            "location_start_kind": "",
+            "location_end": "",
+            "location_end_kind": "",
+            "location_via": "",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "name,quality,emitted",
+    [
+        ("Neubau 20 kV Kabel Albbruck", "medium", True),
+        ("Neubau 110 kV Leitung Albbruck - Waldshut", "high", False),
+        ("Diverse Kleinmaßnahmen", "not_applicable", False),
+        ("Summe", "", False),
+    ],
+)
+def test_rows_emits_only_measures_with_location_quality_none_or_medium(
+    repository, root, name, quality, emitted
+):
+    set_source(repository, **{"Maßnahme": name})
+    [row] = classified(root)
+    assert row["inferred_quality_location"] == quality
+    assert [package["measure_name"] for package in rows()] == ([name] if emitted else [])
+
+
+@pytest.mark.parametrize(
+    "description,emitted", [("", False), ("  ", False), ("Kabel nach Albbruck", True)]
+)
+def test_rows_skips_a_generic_name_with_an_empty_description(
+    repository, root, description, emitted
+):
+    set_source(repository, **{"Maßnahme": "NAP  maßnahme", "measure_description": description})
+    classified(root)
+    assert len(rows()) == int(emitted)
+
+
+def test_rows_skips_a_record_with_a_fresh_proposal_until_its_source_text_changes(repository, root):
+    classified(root)
+    propose({"row_id": "1-2", "locations": [ALBBRUCK]})
+    assert rows() == []
+    with connect(root / "nap_tool.sqlite") as db:
+        db.execute("UPDATE proposal SET status='rejected'")
+    assert rows() == []
+    set_source(repository, measure_description="Kabelneubau zum UW")
+    classified(root)
+    assert [package["row_id"] for package in rows()] == ["1-2"]
+
+
+def set_records(repository, records: list[dict[str, str]]) -> None:
+    """Rewrite the harmonized table with several records and register its new hash."""
+    root, path, values = repository
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, list(values))
+        writer.writeheader()
+        writer.writerows(records)
+    with connect(root / "nap_tool.sqlite") as db:
+        db.execute("UPDATE harmonize_set_output SET output_hash=?", (sha256_file(path),))
+
+
+def test_rows_filters_by_dso_and_limits_the_count(repository, root):
+    values = repository[2]
+    with connect(root / "nap_tool.sqlite") as db:
+        db.execute(
+            "INSERT INTO dso(name,slug,mastr_nr,bdew_code,created_at,updated_at) "
+            "VALUES ('Other','other','XYZ','456','now','now')"
+        )
+    cells = json.loads(values["source_cells_json"])
+    records = []
+    for number, slug in [(2, "test"), (3, "other"), (4, "test")]:
+        cells["origin"]["row_number"] = number
+        records.append({**values, "dso_slug": slug, "source_cells_json": json.dumps(cells)})
+    set_records(repository, records)
+    classified(root)
+    assert [package["row_id"] for package in rows()] == ["1-2", "1-3", "1-4"]
+    assert [package["row_id"] for package in rows("--dso", "ABC")] == ["1-2", "1-4"]
+    assert [package["row_id"] for package in rows("--limit", "2")] == ["1-2", "1-3"]
+    assert [package["row_id"] for package in rows("--dso", "ABC", "--limit", "1")] == ["1-2"]
+
+
+def test_rows_without_classification_output_fails_with_a_clear_error(root):
+    result = CliRunner().invoke(app, ["propose", "rows", "--set-id", "1", "--scheme-id", "1"])
+    assert result.exit_code == 1
+    assert "No classification output for set 1 and scheme 1; run classify first" in result.stderr
+
+
+def test_rows_reads_the_current_source_text_like_propose_add(repository, root):
+    classified(root)
+    set_source(repository, measure_description="Kabel zum UW Albbruck")
+    [package] = rows()
+    assert package["measure_description"] == "Kabel zum UW Albbruck"
+    propose({"row_id": "1-2", "locations": [ALBBRUCK]})
+    assert rows() == []

@@ -23,6 +23,7 @@ from .service import (
     add_proposals,
     csv_bytes,
     import_review,
+    proposal_rows,
     review_rows,
     run,
     source_records,
@@ -102,3 +103,20 @@ def review_import_command(
         typer.echo(f"Review error: {error}", err=True)
         raise typer.Exit(1) from error
     typer.echo(", ".join(f"{count} {status}" for status, count in counts.items()))
+
+
+@propose_app.command(name="rows")
+def propose_rows_command(
+    scheme_id: int = typer.Option(..., min=1, help="Harmonization scheme of the records"),
+    set_id: int = typer.Option(..., min=1, help="Set of the records"),
+    dso: str | None = typer.Option(None, help="Only records of this DSO MaStR number"),
+    limit: int | None = typer.Option(None, min=1, help="At most this many records"),
+) -> None:
+    """Print the measures that need location help as JSON lines."""
+    try:
+        packages = proposal_rows(data_dir(), scheme_id, set_id, dso=dso, limit=limit)
+    except (ValueError, RuntimeError, OSError, sqlite3.Error) as error:
+        typer.echo(f"Proposal error: {error}", err=True)
+        raise typer.Exit(1) from error
+    for package in packages:
+        typer.echo(json.dumps(package, ensure_ascii=False))

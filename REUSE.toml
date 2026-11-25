@@ -142,6 +142,13 @@ SPDX-FileCopyrightText = [
 ]
 SPDX-License-Identifier = "Apache-2.0"
 
+# --- modules ------------------------------------------------------------------
+
+[[annotations]]
+path = "modules/*/uv.lock"
+SPDX-FileCopyrightText = "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut"
+SPDX-License-Identifier = "Apache-2.0"
+
 # Vendored / bundled PDF.js (Mozilla). Listed last so it overrides static/** above.
 [[annotations]]
 path = [
