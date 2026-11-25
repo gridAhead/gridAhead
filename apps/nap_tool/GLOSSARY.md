@@ -136,3 +136,39 @@ _Source term_: Betriebsmittel-Zuordnungscode
 **Grid level**:
 A voltage level or transformation level of the grid: EHV, EHV/HV, HV, HV/MV, MV, MV/LV, LV.
 _Source term_: Netzebene, Spannungsebene
+
+**Proposal**:
+A value suggested by an AI for a record's classification, with a verbatim quote from the
+source as evidence, that takes effect only after automatic checks or human review.
+_Avoid_: suggestion, AI result, reading
+
+**Stale proposal**:
+A proposal whose record's source text changed after it was made.
+
+**Audit sample**:
+A random selection of automatically accepted proposals that a human checks to measure their
+accuracy.
+_Avoid_: spot check, gold sample (for the sample itself)
+
+## Reference data
+
+**DSO area**:
+The territory a DSO serves at one grid level.
+_Source term_: Netzgebiet
+_Avoid_: service area, DSO polygon, grid area
+
+**Gazetteer**:
+The lookup of all place and station names inside each DSO area.
+_Avoid_: candidate table, name index
+
+**Place**:
+A named settlement or part of one: city, town, village, suburb, hamlet, locality.
+_Avoid_: location (for this narrower sense), municipality
+
+**Station**:
+A named substation, switching station or local substation in the grid.
+_Avoid_: plant, site
+
+**Candidate**:
+One gazetteer entry returned as a possible spelling or identity of a queried name.
+_Avoid_: match, hit
