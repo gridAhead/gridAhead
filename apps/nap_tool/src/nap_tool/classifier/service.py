@@ -29,8 +29,17 @@ from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, connect, require_
 
 from . import ClassificationResult, classify
 from .config import CONFIG_PATH, load_config
-from .proposals import ProposalLine, input_sha256, quote_error, row_id
-from .rules import DERIVED_FIELDS
+from .proposals import (
+    SOURCE_FIELDS,
+    ProposalLine,
+    audit_sample,
+    input_sha256,
+    pick_proposal,
+    quote_error,
+    replaces_stage1_location,
+    row_id,
+)
+from .rules import DERIVED_FIELDS, LIST_SEPARATOR
 from .validation import markdown_report, with_metric_expectations
 
 GRID_MEASURE_TYPE_PREFIX = "Maßnahmentabelle"
@@ -236,29 +245,29 @@ def inputs(
 
 
 def load_proposals(connection: sqlite3.Connection) -> dict[str, list[dict]]:
-    """Read every proposal with status `proposed` and its locations.
+    """Read every proposal with status `proposed` or `accepted` and its locations.
 
     Args:
         connection: Open metadata database.
 
     Returns:
-        Proposals by row id, oldest first, each with `id`, `input_sha256` and
-        `locations` (`role`, `name`, `kind`) in submission order.
+        Proposals by row id, oldest first, each with `id`, `status`, `input_sha256` and
+        `locations` (`role`, `name`, `kind`, `candidate`) in submission order.
     """
     proposals: dict[int, dict] = {}
     by_row: dict[str, list[dict]] = {}
     for row in connection.execute(
-        "SELECT p.id, p.row_id, p.input_sha256, l.role, l.name, l.kind "
+        "SELECT p.id, p.row_id, p.status, p.input_sha256, l.role, l.name, l.kind, l.candidate "
         "FROM proposal p JOIN proposal_location l ON l.proposal_id = p.id "
-        "WHERE p.status = 'proposed' ORDER BY p.id, l.id"
+        "WHERE p.status IN ('proposed', 'accepted') ORDER BY p.id, l.id"
     ):
         if row["id"] not in proposals:
             proposals[row["id"]] = dict(
-                id=row["id"], input_sha256=row["input_sha256"], locations=[]
+                id=row["id"], status=row["status"], input_sha256=row["input_sha256"], locations=[]
             )
             by_row.setdefault(row["row_id"], []).append(proposals[row["id"]])
         proposals[row["id"]]["locations"].append(
-            dict(role=row["role"], name=row["name"], kind=row["kind"])
+            dict(role=row["role"], name=row["name"], kind=row["kind"], candidate=row["candidate"])
         )
     return by_row
 
@@ -544,3 +553,151 @@ def add_proposals(
                 dict(line=number, row_id=proposal.row_id, status="stored", proposal_id=proposal_id)
             )
     return report
+
+
+REVIEW_COLUMNS = [
+    "proposal_id",
+    "row_id",
+    "reason",
+    *SOURCE_FIELDS,
+    "stage1_location",
+    "proposal",
+    "candidate",
+    "decision",
+]
+# Not derived from ROLE_COLUMNS: start, site and area share the start column.
+STAGE1_LOCATIONS = (
+    ("start", "inferred_location_start"),
+    ("end", "inferred_location_end"),
+    ("via", "inferred_location_via"),
+)
+
+
+def review_rows(
+    root: Path, scheme_id: int, set_id: int, config_path: Path = CONFIG_PATH
+) -> list[dict[str, str]]:
+    """Collect the unreviewed proposals of a set's records that a human should check.
+
+    Args:
+        root: Data repository root.
+        scheme_id: Harmonization scheme.
+        set_id: Grid-measure set.
+        config_path: Classification YAML, as given to `classify`.
+
+    Returns:
+        Review CSV rows (REVIEW_COLUMNS): every conflicting proposal `classify` would
+        consider, then the audit sample of auto-accepted ones.
+
+    Raises:
+        ValueError: If the harmonized table is missing, stale or malformed.
+    """
+    state = inputs(root, scheme_id, config_path, set_id=set_id)
+    rows, _, mapping = load_rows(state)
+    # Stage 1 alone, so proposals are judged against the rule results.
+    result = classify(rows, state["config"], state["identifiers"], field_mapping=mapping)
+    review, auto = [], []
+    for out in result.rows:
+        record = {**out, **{key: out.get(header, "") for key, header in mapping.items()}}
+        flags = set(out["inferred_flags"].split(LIST_SEPARATOR))
+        proposal = pick_proposal(record, out, flags, state["proposals"].get(out["row_id"], []))
+        if proposal is None or proposal["status"] != "proposed":
+            continue
+        locations = proposal["locations"]
+        conflict = replaces_stage1_location(out, proposal)
+        row = dict(
+            proposal_id=proposal["id"],
+            row_id=out["row_id"],
+            reason="conflict" if conflict else "audit",
+            **{field: record.get(field, "") for field in SOURCE_FIELDS},
+            stage1_location="; ".join(
+                f"{role}: {out[column]}" for role, column in STAGE1_LOCATIONS if out[column]
+            ),
+            proposal="; ".join(
+                f"{loc['role']}: {loc['name']} ({loc['kind']})" for loc in locations
+            ),
+            candidate="; ".join(loc["candidate"] or "" for loc in locations),
+            decision="",
+        )
+        if conflict:
+            review.append(row)
+        else:
+            auto.append((record.get("dso_slug", ""), locations[0]["kind"], row))
+    return review + audit_sample(auto)
+
+
+def import_review(root: Path, rows: Iterable[dict[str, str]]) -> dict[str, int]:
+    """Store the decisions of a review CSV; any invalid row stores nothing (ADR-0008).
+
+    A decision is `accept`, `reject` or a corrected name (names separated by `;` in
+    location order for a proposal with several locations). A correction rejects the
+    proposal and stores an accepted copy with the corrected names and `model = human`.
+    Blank decisions are skipped.
+
+    Args:
+        root: Data repository root.
+        rows: Review CSV rows with `proposal_id` and `decision`.
+
+    Returns:
+        The number of accepted, rejected and corrected proposals.
+
+    Raises:
+        ValueError: For a missing column, an unknown or already reviewed proposal id or an
+            invalid decision.
+    """
+    counts = dict(accepted=0, rejected=0, corrected=0)
+    reviewed_at = now()
+    with connect(root / "nap_tool.sqlite") as db:
+        for line, row in enumerate(rows, 2):
+            if not {"proposal_id", "decision"} <= row.keys():
+                raise ValueError("The CSV needs the columns proposal_id and decision")
+            decision = (row["decision"] or "").strip()
+            if not decision:
+                continue
+            proposal_id = (row["proposal_id"] or "").strip()
+            proposal = db.execute("SELECT * FROM proposal WHERE id=?", (proposal_id,)).fetchone()
+            if proposal is None:
+                raise ValueError(f"Line {line}: unknown proposal id {proposal_id!r}")
+            if proposal["status"] != "proposed":
+                raise ValueError(f"Line {line}: proposal {proposal_id} is already reviewed")
+            status = {"accept": "accepted", "reject": "rejected"}.get(decision.casefold())
+            locations = db.execute(
+                "SELECT * FROM proposal_location WHERE proposal_id=? ORDER BY id",
+                (proposal["id"],),
+            ).fetchall()
+            names = [name.strip() for name in decision.split(";")]
+            if not status and (len(names) != len(locations) or not all(names)):
+                raise ValueError(
+                    f"Line {line}: invalid decision {decision!r}; use accept, reject or "
+                    f"{len(locations)} corrected name(s) separated by ';'"
+                )
+            db.execute(
+                "UPDATE proposal SET status=?, reviewed_at=? WHERE id=?",
+                (status or "rejected", reviewed_at, proposal["id"]),
+            )
+            if status:
+                counts[status] += 1
+                continue
+            corrected = db.execute(
+                "INSERT INTO proposal(row_id,input_sha256,model,created_at,status,reviewed_at) "
+                "VALUES (?,?,'human',?,'accepted',?)",
+                (proposal["row_id"], proposal["input_sha256"], reviewed_at, reviewed_at),
+            ).lastrowid
+            db.executemany(
+                "INSERT INTO proposal_location(proposal_id,role,name,kind,evidence_field,"
+                "evidence_quote,candidate) VALUES (?,?,?,?,?,?,?)",
+                [
+                    (
+                        corrected,
+                        location["role"],
+                        name,
+                        location["kind"],
+                        location["evidence_field"],
+                        location["evidence_quote"],
+                        # The candidate backed the original spelling only.
+                        location["candidate"] if name == location["name"] else None,
+                    )
+                    for location, name in zip(locations, names)
+                ],
+            )
+            counts["corrected"] += 1
+    return counts

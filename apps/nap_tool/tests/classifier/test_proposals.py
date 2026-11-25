@@ -192,7 +192,9 @@ def current_csv(root: Path) -> bytes:
     return (published_directory(root / "classified/set_1", 1) / "classified.csv").read_bytes()
 
 
-def test_a_proposal_that_would_replace_a_stage_1_location_is_not_applied(repository, root):
+def test_a_proposal_that_would_replace_a_stage_1_location_is_flagged_and_not_applied(
+    repository, root
+):
     set_source(repository, **{"Maßnahme": "Neubau 110 kV Leitung Albbruck - Waldshut"})
     [before] = classified(root)
     assert (before["inferred_location_start"], before["inferred_location_end"]) == (
@@ -203,7 +205,8 @@ def test_a_proposal_that_would_replace_a_stage_1_location_is_not_applied(reposit
     end = {**ALBBRUCK, "role": "end", "name": "Waldshut-Tiengen"}
     propose({"row_id": "1-2", "locations": [via, end]})
     [after] = classified(root)
-    assert after == before
+    assert "llm_proposal_conflict" in after["inferred_flags"].split(",")
+    assert {key for key in before if before[key] != after[key]} == {"inferred_flags"}
 
 
 def test_a_stale_proposal_is_not_applied_and_leaves_the_output_unchanged(repository, root):

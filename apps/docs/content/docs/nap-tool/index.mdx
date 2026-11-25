@@ -408,11 +408,38 @@ uv run nap-tool propose add --set-id 1 --scheme-id 7 \
   node. A changed source cell makes older proposals stale; a changed classifier rule
   does not.
 
-`classify` takes per record the newest non-stale `proposed` proposal and applies it only
-if every location it proposes fills an empty stage-1 column. Applied values are
-flagged `location_source:llm_proposal` and their location quality is at most
-`medium`. Stale proposals are ignored, source columns never change, and without
-proposals the output is the same as stage 1 alone.
+`classify` takes per record the newest non-stale `accepted` proposal, otherwise the
+newest non-stale `proposed` one:
+
+- An accepted proposal replaces the stage-1 values of the location columns it names and
+  is flagged `location_source:reviewed_proposal`; its location quality is not capped.
+- A proposed one applies only if every location it proposes fills an empty stage-1
+  column (auto-acceptance), flagged `location_source:llm_proposal` with location quality
+  at most `medium`. Otherwise it is flagged `llm_proposal_conflict` and not applied.
+- Rejected and stale proposals are ignored, source columns never change, and without
+  proposals the output is the same as stage 1 alone.
+
+A human reviews proposals through a CSV round trip, then runs `classify` again:
+
+```bash
+uv run nap-tool propose review export review.csv --set-id 1 --scheme-id 7
+uv run nap-tool propose review import review.csv
+```
+
+- `export` writes every conflicting proposal (`reason` `conflict`) and an audit sample
+  of auto-accepted ones (`audit`): about 5 % per DSO, at least 3, spread over location
+  kinds, with a fixed seed, so the same proposals give the same sample. Columns:
+  `proposal_id`, `row_id`, `reason`, the three source fields, `stage1_location`,
+  `proposal`, `candidate` and an empty `decision`.
+  Conflicts are judged against stage 1 with the default rules; after `classify
+  --config-path`, pass the same `--config-path` to `export`.
+- In `decision`, write `accept`, `reject` or the corrected name; for a proposal with
+  several locations, the corrected names in the order of `proposal`, separated by `;`.
+  A blank decision leaves the proposal unreviewed.
+- `import` sets the status and `reviewed_at`. A correction rejects the proposal and
+  stores a copy with the corrected names as an accepted proposal with `model = human`.
+  An unknown or already reviewed proposal id or an invalid decision fails the import
+  with the line number, and nothing is stored.
 
 ## Data version
 
