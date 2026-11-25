@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "gazetteer"
+version = "0.1.0"
+description = "Fuzzy-match place and station names against the gazetteer of one DSO."
+requires-python = ">=3.12,<3.13"
+license = "Apache-2.0"
+dependencies = [
+    "rapidfuzz>=3.0",
+]
+
+[dependency-groups]
+# gazetteer-build builds the fixture gazetteer in the end-to-end tests; it is never a
+# runtime dependency, so the CLI stays free of geo packages.
+dev = [
+    "gazetteer-build",
+    "pytest>=8",
+    "ruff>=0.12",
+]
+
+[tool.uv.sources]
+gazetteer-build = { path = "../gazetteer_build", editable = true }
+
+[project.scripts]
+gazetteer = "gazetteer:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "PLW1514"]
+preview = true
+explicit-preview-rules = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
