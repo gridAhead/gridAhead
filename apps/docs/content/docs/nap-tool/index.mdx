@@ -58,6 +58,7 @@ uv run nap-tool download      # fetch the PDFs of registered documents
 uv run nap-tool extract --tool docling
 uv run nap-tool extract --tool llmPDF
 uv run nap-tool ui            # review tables in the browser
+uv run nap-tool propose rows --set-id 1 --scheme-id 7 --limit 20
 uv run nap-tool propose add --set-id 1 --scheme-id 7 --model <model> --skill-version <v> < proposals.jsonl
 ```
 
@@ -384,9 +385,29 @@ decides whether they take effect (ADR-0002, ADR-0008). Proposals live in the tab
 of the record's source text, independent of any set. History is never deleted.
 
 ```bash
+uv run nap-tool propose rows --set-id 1 --scheme-id 7 [--dso <MaStR number>] [--limit 20]
 uv run nap-tool propose add --set-id 1 --scheme-id 7 \
   --model claude-opus-5-5 --skill-version 0.1 < proposals.jsonl
 ```
+
+`propose rows` reads the current classification output of the set and scheme (run
+`classify` first) and prints one JSON line per measure that needs location help:
+
+```json
+{"row_id": "1234-56", "dso_mastr_nr": "SNB123456789012", "asset_class": "line",
+  "grid_level": "MV", "measure_name": "Neubau 20 kV Kabel", "measure_description": "",
+  "upstream_grid_node": "UW Albbruck", "location_start": "", "location_start_kind": "",
+  "location_end": "", "location_end_kind": "", "location_via": ""}
+```
+
+- Only measures with location quality `none` or `medium` are printed, in the order of
+  the classification output. Source text comes from the current harmonized table, as
+  in `propose add`.
+- Records with a generic measure name (`locations.generic_names`, such as "NAP
+  Maßnahme") and an empty description are skipped, as are records with a proposal of
+  any status for their current source text (`input_sha256`, see below); a changed
+  source cell prints the record again.
+- `--dso` keeps one DSO's records; `--limit` stops after that many lines.
 
 `propose add` reads one proposal per line on stdin:
 

@@ -29,8 +29,8 @@ from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, connect, require_
 
 from . import ClassificationResult, classify
 from .config import CONFIG_PATH, load_config
-from .proposals import ProposalLine, input_sha256, quote_error, row_id
-from .rules import DERIVED_FIELDS
+from .proposals import SOURCE_FIELDS, ProposalLine, input_sha256, quote_error, row_id
+from .rules import DERIVED_FIELDS, comparison
 from .validation import markdown_report, with_metric_expectations
 
 GRID_MEASURE_TYPE_PREFIX = "Maßnahmentabelle"
@@ -544,3 +544,86 @@ def add_proposals(
                 dict(line=number, row_id=proposal.row_id, status="stored", proposal_id=proposal_id)
             )
     return report
+
+
+def proposal_rows(
+    root: Path,
+    scheme_id: int,
+    set_id: int,
+    *,
+    dso: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, str]]:
+    """Select the measures of the current classification that need location help.
+
+    Selects measures with location quality none or medium, skipping generic-name records
+    with an empty description and records with a proposal of any status for their
+    current `input_sha256`. Source text and hash come from the harmonized table, as in
+    `propose add`, so an output made stale by new proposals still selects correctly.
+
+    Args:
+        root: Data repository root.
+        scheme_id: Harmonization scheme.
+        set_id: Grid-measure set.
+        dso: Only records of this DSO MaStR number.
+        limit: At most this many records, in classification output order.
+
+    Returns:
+        One reading package per selected measure.
+
+    Raises:
+        ValueError: If the set and scheme have no classification output.
+    """
+    if not _pointer(root / "classified" / f"set_{set_id}", scheme_id).is_file():
+        raise ValueError(
+            f"No classification output for set {set_id} and scheme {scheme_id}; run classify first"
+        )
+    state = inputs(root, scheme_id, set_id=set_id)
+    rows, _, mapping = load_rows(state)
+    records = {
+        row_id(record): record
+        for record in (
+            {**row, **{key: row.get(header, "") for key, header in mapping.items()}} for row in rows
+        )
+    }
+    directory, _ = saved_output(root, scheme_id, set_id=set_id)
+    with (directory / "classified.csv").open(encoding="utf-8", newline="") as stream:
+        classified = list(csv.DictReader(stream))
+    with database(root) as connection:
+        proposed = {
+            tuple(row) for row in connection.execute("SELECT row_id, input_sha256 FROM proposal")
+        }
+    generic = {comparison(name) for name in state["config"].locations["generic_names"]}
+    packages = []
+    for row in classified:
+        # ponytail: a row gone from the harmonized table waits for the next classify
+        record = records.get(row["row_id"])
+        if (
+            record is None
+            or (dso is not None and row["dso_mastr_nr"] != dso)
+            or row["inferred_record_type"] != "measure"
+            or row["inferred_quality_location"] not in ("none", "medium")
+            or (
+                comparison(record.get("measure_name", "")) in generic
+                and not record.get("measure_description", "").strip()
+            )
+            or (row["row_id"], input_sha256(record)) in proposed
+        ):
+            continue
+        packages.append(
+            {
+                "row_id": row["row_id"],
+                "dso_mastr_nr": row["dso_mastr_nr"],
+                "asset_class": row["inferred_asset_class"],
+                "grid_level": row["inferred_grid_level"],
+                **{field: record.get(field, "") for field in SOURCE_FIELDS},
+                "location_start": row["inferred_location_start"],
+                "location_start_kind": row["inferred_location_start_kind"],
+                "location_end": row["inferred_location_end"],
+                "location_end_kind": row["inferred_location_end_kind"],
+                "location_via": row["inferred_location_via"],
+            }
+        )
+        if len(packages) == limit:
+            break
+    return packages
