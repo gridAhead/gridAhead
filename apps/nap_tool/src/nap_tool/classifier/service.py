@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Read-only metadata access and atomic classified-output publication."""
+"""Metadata access, proposal storage and atomic classified-output publication."""
 
 from __future__ import annotations
 
@@ -18,15 +18,18 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable, Iterator
 
 from filelock import FileLock, Timeout
+from pydantic import ValidationError
 
 from nap_tool.data import checked_file, replace_file, resolve_path
-from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, require_version
+from nap_tool.database.repository import now
+from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, connect, require_version
 
 from . import ClassificationResult, classify
 from .config import CONFIG_PATH, load_config
+from .proposals import ProposalLine, input_sha256, quote_error, row_id
 from .rules import DERIVED_FIELDS
 from .validation import markdown_report, with_metric_expectations
 
@@ -195,6 +198,13 @@ def inputs(
             tables = _pair_tables(connection, root, scheme, pair["set_id"])
         except HTTPException as error:
             raise ValueError(f"Harmonized source unavailable: {error.detail}") from error
+        # Proposals have no set (ADR-0008); keep those of this table's records, so other
+        # sets' proposals keep the output fresh.
+        proposals = load_proposals(connection)
+        if proposals:
+            with path.open(encoding="utf-8-sig", newline="") as source:
+                row_ids = {row_id(record) for record in csv.DictReader(source)}
+            proposals = {key: items for key, items in proposals.items() if key in row_ids}
         current = _pair_manifest(_fields(connection, scheme, tables), tables)
         if current != scheme["source_manifest_hash"]:
             raise ValueError("Harmonized sources changed; regenerate the harmonized table first")
@@ -208,6 +218,8 @@ def inputs(
                 "scheme_updated_at": scheme["updated_at"],
                 "identifiers": identifiers,
                 "config": config.model_dump(),
+                # ponytail: only when present, so outputs from before proposals stay fresh
+                **({"proposals": proposals} if proposals else {}),
             }
         )
     ).hexdigest()
@@ -218,8 +230,37 @@ def inputs(
         fields=fields,
         identifiers=identifiers,
         config=config,
+        proposals=proposals,
         fingerprint=fingerprint,
     )
+
+
+def load_proposals(connection: sqlite3.Connection) -> dict[str, list[dict]]:
+    """Read every proposal with status `proposed` and its locations.
+
+    Args:
+        connection: Open metadata database.
+
+    Returns:
+        Proposals by row id, oldest first, each with `id`, `input_sha256` and
+        `locations` (`role`, `name`, `kind`) in submission order.
+    """
+    proposals: dict[int, dict] = {}
+    by_row: dict[str, list[dict]] = {}
+    for row in connection.execute(
+        "SELECT p.id, p.row_id, p.input_sha256, l.role, l.name, l.kind "
+        "FROM proposal p JOIN proposal_location l ON l.proposal_id = p.id "
+        "WHERE p.status = 'proposed' ORDER BY p.id, l.id"
+    ):
+        if row["id"] not in proposals:
+            proposals[row["id"]] = dict(
+                id=row["id"], input_sha256=row["input_sha256"], locations=[]
+            )
+            by_row.setdefault(row["row_id"], []).append(proposals[row["id"]])
+        proposals[row["id"]]["locations"].append(
+            dict(role=row["role"], name=row["name"], kind=row["kind"])
+        )
+    return by_row
 
 
 def load_rows(state: dict) -> tuple[list[dict[str, str]], list[str], dict[str, str]]:
@@ -270,7 +311,13 @@ def run(
     with acquired:
         state = inputs(root, scheme_id, config_path, set_id=set_id)
         rows, headers, mapping = load_rows(state)
-        result = classify(rows, state["config"], state["identifiers"], field_mapping=mapping)
+        result = classify(
+            rows,
+            state["config"],
+            state["identifiers"],
+            field_mapping=mapping,
+            proposals=state["proposals"],
+        )
         contents = {
             "classified.csv": csv_bytes(result.rows, headers + DERIVED_FIELDS),
             "validation_report.md": markdown_report(result.report).encode(),
@@ -407,3 +454,93 @@ def output_status(
         reason=reason,
         report=report,
     )
+
+
+def source_records(root: Path, scheme_id: int, set_id: int) -> dict[str, dict[str, str]]:
+    """Read the records of a set's harmonized table, keyed by row id.
+
+    Args:
+        root: Data repository root.
+        scheme_id: Harmonization scheme.
+        set_id: Grid-measure set.
+
+    Returns:
+        Records with stable field keys, by row id (`<extract table>-<row number>`).
+
+    Raises:
+        ValueError: If the harmonized table is missing, stale or malformed.
+    """
+    state = inputs(root, scheme_id, set_id=set_id)
+    rows, _, mapping = load_rows(state)
+    records = [
+        {**row, **{key: row.get(header, "") for key, header in mapping.items()}} for row in rows
+    ]
+    return {row_id(record): record for record in records}
+
+
+def add_proposals(
+    root: Path,
+    records: dict[str, dict[str, str]],
+    lines: Iterable[str],
+    model: str,
+    skill_version: str,
+) -> list[dict]:
+    """Check proposal JSON lines and store each passing one as `proposed` (ADR-0008).
+
+    Args:
+        root: Data repository root.
+        records: Records with stable field keys, by row id.
+        lines: Proposal JSON lines; blank lines are skipped.
+        model: Model that made the proposals.
+        skill_version: Version of the Skill that guided the model.
+
+    Returns:
+        One report per non-blank line: its line number, row id and status, with the
+        proposal id if stored or the reason if rejected.
+    """
+    report = []
+    created_at = now()
+    with connect(root / "nap_tool.sqlite") as db:
+        for number, line in enumerate(lines, 1):
+            if not line.strip():
+                continue
+            try:
+                proposal = ProposalLine.model_validate_json(line)
+            except ValidationError as error:
+                first = error.errors()[0]
+                where = ".".join(str(part) for part in first["loc"])
+                reason = f"{where}: {first['msg']}" if where else first["msg"]
+                report.append(dict(line=number, row_id=None, status="rejected", reason=reason))
+                continue
+            record = records.get(proposal.row_id)
+            reason = "unknown row_id" if record is None else quote_error(record, proposal)
+            if reason:
+                report.append(
+                    dict(line=number, row_id=proposal.row_id, status="rejected", reason=reason)
+                )
+                continue
+            proposal_id = db.execute(
+                "INSERT INTO proposal(row_id,input_sha256,model,skill_version,created_at) "
+                "VALUES (?,?,?,?,?)",
+                (proposal.row_id, input_sha256(record), model, skill_version, created_at),
+            ).lastrowid
+            db.executemany(
+                "INSERT INTO proposal_location(proposal_id,role,name,kind,evidence_field,"
+                "evidence_quote,candidate) VALUES (?,?,?,?,?,?,?)",
+                [
+                    (
+                        proposal_id,
+                        location.role,
+                        location.name,
+                        location.kind,
+                        location.evidence.field,
+                        location.evidence.quote,
+                        location.candidate,
+                    )
+                    for location in proposal.locations
+                ],
+            )
+            report.append(
+                dict(line=number, row_id=proposal.row_id, status="stored", proposal_id=proposal_id)
+            )
+    return report

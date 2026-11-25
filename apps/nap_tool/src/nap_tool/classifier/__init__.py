@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from .config import ClassifyConfig
 from .locations import LocationFinder
+from .proposals import LLM_PROPOSAL_FLAG, apply_proposal
 from .rules import (
     DERIVED_FIELDS,
     LIST_SEPARATOR,
@@ -48,6 +49,7 @@ LOCATION_ISSUES = {
     "location_route_split",
     "location_multiple",
     "location_end_missing",
+    LLM_PROPOSAL_FLAG,
 }
 
 
@@ -140,6 +142,7 @@ def classify(
     dso_identifiers: dict[str, dict[str, str]],
     *,
     field_mapping: dict[str, str] | None = None,
+    proposals: dict[str, list[dict]] | None = None,
 ) -> ClassificationResult:
     """Append derived columns to harmonized rows and validate the result.
 
@@ -151,6 +154,8 @@ def classify(
         config: Classification configuration.
         dso_identifiers: Name, MaStR number and BDEW code per DSO slug.
         field_mapping: Stable field keys mapped to the original CSV headers.
+        proposals: Proposals with status `proposed` by row id, oldest first (see
+            `proposals.apply_proposal`).
 
     Returns:
         Classified rows, validation report and unmapped vocabulary values.
@@ -271,7 +276,9 @@ def classify(
                 entry["dsos"].add(row.get("dso_slug", ""))
             out[NORMALIZED_OUTPUT[field]] = normalized[field]
         if kind != "overview":
-            flags |= classify_measure(row, out, normalized, numeric, (config, finder, unusual_hv))
+            flags |= classify_measure(
+                row, out, normalized, numeric, (config, finder, unusual_hv, proposals or {})
+            )
         identity = tuple(
             (key, value) for key, value in sorted(original.items()) if key != "source_cells_json"
         )
@@ -301,7 +308,7 @@ def classify_measure(
     out: dict[str, str],
     normalized: dict[str, str],
     numeric: dict[str, str],
-    context: tuple[ClassifyConfig, LocationFinder, set[str]],
+    context: tuple[ClassifyConfig, LocationFinder, set[str], dict[str, list[dict]]],
 ) -> set[str]:
     """Derive asset, measure type, grid level, voltage, capacity, location and quality.
 
@@ -310,12 +317,13 @@ def classify_measure(
         out: Derived values; filled in place.
         normalized: Normalized vocabulary values of the row.
         numeric: Valid numeric values of the row.
-        context: Configuration, location finder and DSOs with an unusual high voltage.
+        context: Configuration, location finder, DSOs with an unusual high voltage and
+            the location proposals by row id.
 
     Returns:
         Flags of the row.
     """
-    config, finder, unusual_hv = context
+    config, finder, unusual_hv, proposals = context
     flags: set[str] = set()
     primary_level = normalized["grid_level"].split(LIST_SEPARATOR)[0]
     assets, codes, source = detect_assets(row, config, primary_level)
@@ -375,5 +383,6 @@ def classify_measure(
     out["inferred_object_ref"] = object_refs(row, config)
     if out["inferred_record_type"] == "measure":
         flags |= derive_locations(row, out, finder, config)
+        flags = apply_proposal(row, out, flags, proposals.get(out["row_id"], []))
     quality(out, flags)
     return flags

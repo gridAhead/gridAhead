@@ -22,6 +22,7 @@ from nap_tool.database.schema import DB_VERSION, connect
 from nap_tool.database.upgrade import upgrade_repository
 
 GENERATION = "scheme_1_" + "a" * 32
+PROPOSAL_STEP = (21, {"proposal_tables": 2})
 
 
 def _make_db(root: Path, version: int) -> Path:
@@ -60,7 +61,7 @@ def test_link_becomes_pointer(legacy: Path, kind: str) -> None:
             pytest.skip("creating symlinks needs Developer Mode or admin rights on Windows")
     else:
         link.write_text(f".versions/{GENERATION}", encoding="utf-8")
-    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 1})]
+    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 1}), PROPOSAL_STEP]
     assert _user_version(legacy / "nap_tool.sqlite") == DB_VERSION
     assert not os.path.lexists(link)
     assert (published_directory(set_directory, 1) / "classified.csv").is_file()
@@ -84,12 +85,12 @@ def test_bad_link_keeps_old_version_and_can_be_rerun(legacy: Path, target: str, 
     assert _user_version(legacy / "nap_tool.sqlite") == 20
     assert not (legacy / "classified/set_1/scheme_1.current").exists()
     link.write_text(f".versions/{GENERATION}", encoding="utf-8")
-    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 1})]
+    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 1}), PROPOSAL_STEP]
 
 
 def test_repository_without_classification_output(legacy: Path) -> None:
     """Only the version changes when nothing was classified yet."""
-    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 0})]
+    assert upgrade_repository(legacy) == [(20, {"classification_pointers": 0}), PROPOSAL_STEP]
     assert _user_version(legacy / "nap_tool.sqlite") == DB_VERSION
 
 
@@ -114,7 +115,38 @@ def test_cli(legacy: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NAP_DATA_DIR", str(legacy))
     result = CliRunner().invoke(app, ["upgrade"])
     assert result.exit_code == 0, result.output
-    assert f"DB_VERSION 20 -> {DB_VERSION}" in result.output
+    assert "DB_VERSION 20 -> 21" in result.output
+    assert "DB_VERSION 21 -> 22" in result.output
     result = CliRunner().invoke(app, ["upgrade"])
     assert result.exit_code == 0, result.output
     assert "already current" in result.output
+
+
+def _tables(path: Path) -> set[str]:
+    with closing(sqlite3.connect(path)) as connection:
+        return {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+
+
+def test_upgrade_adds_proposal_tables_and_can_be_rerun(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DB_VERSION 21 -> 22 creates the proposal tables (ADR-0008); repeating the step is safe."""
+    path = _make_db(tmp_path, 21)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            "DROP TABLE IF EXISTS proposal_location; DROP TABLE IF EXISTS proposal;"
+        )
+    monkeypatch.setenv("NAP_DATA_DIR", str(tmp_path))
+    result = CliRunner().invoke(app, ["upgrade"])
+    assert result.exit_code == 0, result.output
+    assert "DB_VERSION 21 -> 22" in result.output
+    assert {"proposal", "proposal_location"} <= _tables(path)
+    assert _user_version(path) == 22
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("PRAGMA user_version = 21")
+    result = CliRunner().invoke(app, ["upgrade"])
+    assert result.exit_code == 0, result.output
+    assert _user_version(path) == 22
