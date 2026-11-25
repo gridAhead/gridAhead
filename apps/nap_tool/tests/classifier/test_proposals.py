@@ -209,6 +209,47 @@ def test_a_proposal_that_would_replace_a_stage_1_location_is_flagged_and_not_app
     assert {key for key in before if before[key] != after[key]} == {"inferred_flags"}
 
 
+def test_a_proposal_repeating_the_stage_1_location_is_no_conflict_and_changes_nothing(
+    repository, root
+):
+    set_source(repository, **{"Maßnahme": "Neubau 110 kV Leitung Albbruck - Waldshut"})
+    [before] = classified(root)
+    start = {
+        **ALBBRUCK,
+        "name": "ALBBRUCK",
+        "evidence": {"field": "measure_name", "quote": "Albbruck"},
+    }
+    propose({"row_id": "1-2", "locations": [start]})
+    [after] = classified(root)
+    assert after == before
+
+
+def test_a_proposal_repeating_one_stage_1_location_fills_the_others(repository, root):
+    set_source(
+        repository,
+        measure_description="Kabel nach Waldshut",
+        **{"Maßnahme": "Neubau 20 kV Kabel Albbruck"},
+    )
+    [before] = classified(root)
+    assert (before["inferred_location_start"], before["inferred_location_end"]) == ("Albbruck", "")
+    start = {**ALBBRUCK, "name": " albbruck", "kind": "place"}
+    end = {
+        **ALBBRUCK,
+        "role": "end",
+        "name": "Waldshut",
+        "evidence": {"field": "measure_description", "quote": "Waldshut"},
+    }
+    propose({"row_id": "1-2", "locations": [start, end]})
+    [after] = classified(root)
+    assert (
+        after["inferred_location_start"],
+        after["inferred_location_start_kind"],
+        after["inferred_location_end"],
+    ) == ("Albbruck", before["inferred_location_start_kind"], "Waldshut")
+    flags = after["inferred_flags"].split(",")
+    assert "location_source:llm_proposal" in flags and "llm_proposal_conflict" not in flags
+
+
 def test_a_stale_proposal_is_not_applied_and_leaves_the_output_unchanged(repository, root):
     set_source(repository, measure_description="Kabelneubau zum UW")
     classified(root)

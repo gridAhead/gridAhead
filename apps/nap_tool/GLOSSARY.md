@@ -143,8 +143,8 @@ source as evidence, that takes effect only after automatic checks or human revie
 _Avoid_: suggestion, AI result, reading
 
 **Conflicting proposal**:
-A proposal that would replace a location found by the stage-1 rules; it takes effect only
-after a human accepts it.
+A proposal that would replace a location found by the stage-1 rules with a different name;
+it takes effect only after a human accepts it.
 
 **Stale proposal**:
 A proposal whose record's source text changed after it was made.

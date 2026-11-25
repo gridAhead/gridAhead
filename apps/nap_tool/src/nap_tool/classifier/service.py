@@ -31,12 +31,12 @@ from . import ClassificationResult, classify
 from .config import CONFIG_PATH, load_config
 from .proposals import (
     SOURCE_FIELDS,
+    STAGE1_LOCATIONS,
     ProposalLine,
     audit_sample,
     input_sha256,
-    pick_proposal,
+    pick_proposals,
     quote_error,
-    replaces_stage1_location,
     row_id,
 )
 from .rules import DERIVED_FIELDS, LIST_SEPARATOR, comparison
@@ -50,6 +50,16 @@ OUTPUT_FILES = (
     "unmapped_values.csv",
 )
 VERSIONS_DIR = ".versions"  # holds output generations; see ADR-0006
+REVIEW_COLUMNS = [
+    "proposal_id",
+    "row_id",
+    "reason",
+    *SOURCE_FIELDS,
+    "stage1_location",
+    "proposal",
+    "candidate",
+    "decision",
+]
 
 
 def json_bytes(value: object) -> bytes:
@@ -481,10 +491,31 @@ def source_records(root: Path, scheme_id: int, set_id: int) -> dict[str, dict[st
     """
     state = inputs(root, scheme_id, set_id=set_id)
     rows, _, mapping = load_rows(state)
-    records = [
+    return {row_id(record): record for record in with_field_keys(rows, mapping)}
+
+
+def with_field_keys(rows: list[dict[str, str]], mapping: dict[str, str]) -> list[dict[str, str]]:
+    """Add the stable field keys to rows read with their original CSV headers.
+
+    Args:
+        rows: Rows by original header.
+        mapping: Stable field keys mapped to the original CSV headers.
+
+    Returns:
+        Each row with its stable field keys added.
+    """
+    return [
         {**row, **{key: row.get(header, "") for key, header in mapping.items()}} for row in rows
     ]
-    return {row_id(record): record for record in records}
+
+
+def _insert_locations(db: sqlite3.Connection, proposal_id: int, locations: Iterable[tuple]) -> None:
+    """Store a proposal's locations as (role, name, kind, evidence field, quote, candidate)."""
+    db.executemany(
+        "INSERT INTO proposal_location(proposal_id,role,name,kind,evidence_field,"
+        "evidence_quote,candidate) VALUES (?,?,?,?,?,?,?)",
+        [(proposal_id, *location) for location in locations],
+    )
 
 
 def add_proposals(
@@ -533,12 +564,11 @@ def add_proposals(
                 "VALUES (?,?,?,?,?)",
                 (proposal.row_id, input_sha256(record), model, skill_version, created_at),
             ).lastrowid
-            db.executemany(
-                "INSERT INTO proposal_location(proposal_id,role,name,kind,evidence_field,"
-                "evidence_quote,candidate) VALUES (?,?,?,?,?,?,?)",
+            _insert_locations(
+                db,
+                proposal_id,
                 [
                     (
-                        proposal_id,
                         location.role,
                         location.name,
                         location.kind,
@@ -553,24 +583,6 @@ def add_proposals(
                 dict(line=number, row_id=proposal.row_id, status="stored", proposal_id=proposal_id)
             )
     return report
-
-
-REVIEW_COLUMNS = [
-    "proposal_id",
-    "row_id",
-    "reason",
-    *SOURCE_FIELDS,
-    "stage1_location",
-    "proposal",
-    "candidate",
-    "decision",
-]
-# Not derived from ROLE_COLUMNS: start, site and area share the start column.
-STAGE1_LOCATIONS = (
-    ("start", "inferred_location_start"),
-    ("end", "inferred_location_end"),
-    ("via", "inferred_location_via"),
-)
 
 
 def review_rows(
@@ -596,33 +608,36 @@ def review_rows(
     # Stage 1 alone, so proposals are judged against the rule results.
     result = classify(rows, state["config"], state["identifiers"], field_mapping=mapping)
     review, auto = [], []
-    for out in result.rows:
-        record = {**out, **{key: out.get(header, "") for key, header in mapping.items()}}
+    for out, record in zip(result.rows, with_field_keys(result.rows, mapping)):
         flags = set(out["inferred_flags"].split(LIST_SEPARATOR))
-        proposal = pick_proposal(record, out, flags, state["proposals"].get(out["row_id"], []))
-        if proposal is None or proposal["status"] != "proposed":
-            continue
-        locations = proposal["locations"]
-        conflict = replaces_stage1_location(out, proposal)
-        row = dict(
-            proposal_id=proposal["id"],
-            row_id=out["row_id"],
-            reason="conflict" if conflict else "audit",
-            **{field: record.get(field, "") for field in SOURCE_FIELDS},
-            stage1_location="; ".join(
-                f"{role}: {out[column]}" for role, column in STAGE1_LOCATIONS if out[column]
-            ),
-            proposal="; ".join(
-                f"{loc['role']}: {loc['name']} ({loc['kind']})" for loc in locations
-            ),
-            candidate="; ".join(loc["candidate"] or "" for loc in locations),
-            decision="",
-        )
-        if conflict:
-            review.append(row)
-        else:
-            auto.append((record.get("dso_slug", ""), locations[0]["kind"], row))
+        proposals = state["proposals"].get(out["row_id"], [])
+        proposal, conflicts = pick_proposals(record, out, flags, proposals)
+        review += [_review_row(record, conflict, "conflict") for conflict in conflicts]
+        if proposal is not None and proposal["status"] == "proposed":
+            kind = proposal["locations"][0]["kind"]
+            auto.append((record.get("dso_slug", ""), kind, _review_row(record, proposal, "audit")))
     return review + audit_sample(auto)
+
+
+def _review_row(record: dict[str, str], proposal: dict, reason: str) -> dict:
+    """Return the review CSV row (REVIEW_COLUMNS) of a proposal for a classified record."""
+    locations = proposal["locations"]
+    return dict(
+        proposal_id=proposal["id"],
+        row_id=record["row_id"],
+        reason=reason,
+        **{field: record.get(field, "") for field in SOURCE_FIELDS},
+        stage1_location="; ".join(
+            f"{label}: {record[column]}"
+            for label, column in STAGE1_LOCATIONS.items()
+            if record[column]
+        ),
+        proposal="; ".join(
+            f"{location['role']}: {location['name']} ({location['kind']})" for location in locations
+        ),
+        candidate="; ".join(location["candidate"] or "" for location in locations),
+        decision="",
+    )
 
 
 def import_review(root: Path, rows: Iterable[dict[str, str]]) -> dict[str, int]:
@@ -682,12 +697,11 @@ def import_review(root: Path, rows: Iterable[dict[str, str]]) -> dict[str, int]:
                 "VALUES (?,?,'human',?,'accepted',?)",
                 (proposal["row_id"], proposal["input_sha256"], reviewed_at, reviewed_at),
             ).lastrowid
-            db.executemany(
-                "INSERT INTO proposal_location(proposal_id,role,name,kind,evidence_field,"
-                "evidence_quote,candidate) VALUES (?,?,?,?,?,?,?)",
+            _insert_locations(
+                db,
+                corrected,
                 [
                     (
-                        corrected,
                         location["role"],
                         name,
                         location["kind"],
@@ -737,12 +751,7 @@ def proposal_rows(
         )
     state = inputs(root, scheme_id, set_id=set_id)
     rows, _, mapping = load_rows(state)
-    records = {
-        row_id(record): record
-        for record in (
-            {**row, **{key: row.get(header, "") for key, header in mapping.items()}} for row in rows
-        )
-    }
+    records = {row_id(record): record for record in with_field_keys(rows, mapping)}
     directory, _ = saved_output(root, scheme_id, set_id=set_id)
     with (directory / "classified.csv").open(encoding="utf-8", newline="") as stream:
         classified = list(csv.DictReader(stream))
@@ -753,7 +762,7 @@ def proposal_rows(
     generic = {comparison(name) for name in state["config"].locations["generic_names"]}
     packages = []
     for row in classified:
-        # ponytail: a row gone from the harmonized table waits for the next classify
+        # ponytail: a record gone from the harmonized table waits for the next classify
         record = records.get(row["row_id"])
         if (
             record is None

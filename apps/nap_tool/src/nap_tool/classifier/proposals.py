@@ -25,7 +25,8 @@ SourceField = Literal["measure_name", "measure_description", "upstream_grid_node
 # proposal non-stale and a changed source cell makes it stale.
 SOURCE_FIELDS = get_args(SourceField)
 LLM_PROPOSAL_FLAG = "location_source:llm_proposal"
-REVIEWED_PROPOSAL_FLAG = "location_source:reviewed_proposal"
+# Marks a human-accepted proposal, whose location quality is not capped at medium.
+REVIEWED_PROPOSAL_FLAG = "llm_proposal_reviewed"
 CONFLICT_FLAG = "llm_proposal_conflict"
 # Flags describing how stage 1 derived its locations, void once a reviewer overrules them;
 # matched with startswith, so `location_source:` covers every source.
@@ -41,6 +42,10 @@ ROLE_COLUMNS = {
     "area": "inferred_location_start",
     "end": "inferred_location_end",
     "via": "inferred_location_via",
+}
+# Stage-1 location columns by their label in the review CSV: start, end, via.
+STAGE1_LOCATIONS = {
+    column.removeprefix("inferred_location_"): column for column in ROLE_COLUMNS.values()
 }
 KIND_COLUMNS = {
     "inferred_location_start": "inferred_location_start_kind",
@@ -139,43 +144,83 @@ def quote_error(record: dict[str, str], proposal: ProposalLine) -> str | None:
     return None
 
 
-def pick_proposal(
+def proposed_columns(out: dict[str, str], proposal: dict) -> dict[str, list[dict]]:
+    """Group a proposal's locations by the location column they fill.
+
+    A column whose stage-1 value the proposal repeats (same names after whitespace and
+    case normalization) is left out: the proposal confirms it and changes nothing there.
+
+    Args:
+        out: Derived values of the record after stage 1.
+        proposal: Proposal with `locations` (`role`, `name`, `kind`).
+
+    Returns:
+        The locations of each column the proposal would change, in submission order.
+    """
+    columns: dict[str, list[dict]] = {}
+    for location in proposal["locations"]:
+        columns.setdefault(ROLE_COLUMNS[location["role"]], []).append(location)
+    return {
+        column: locations
+        for column, locations in columns.items()
+        if [_normalized(location["name"]) for location in locations]
+        != [_normalized(name) for name in out[column].split(LIST_SEPARATOR) if name.strip()]
+    }
+
+
+def replaces_stage1_location(out: dict[str, str], proposal: dict) -> bool:
+    """Tell whether a proposal would replace a stage-1 location with a different one.
+
+    Args:
+        out: Derived values of the record after stage 1.
+        proposal: Proposal with `locations` (`role`, `name`, `kind`).
+
+    Returns:
+        True if a column the proposal would change already has a stage-1 value.
+    """
+    return any(out[column] for column in proposed_columns(out, proposal))
+
+
+def pick_proposals(
     record: dict[str, str], out: dict[str, str], flags: set[str], proposals: list[dict]
-) -> dict | None:
-    """Return the proposal `classify` considers for a record.
+) -> tuple[dict | None, list[dict]]:
+    """Return the proposal `classify` applies to a record and its unreviewed conflicts.
 
     Args:
         record: Record with stable field keys.
         out: Derived values of the record after stage 1.
         flags: Flags of the record after stage 1.
         proposals: Proposed and accepted proposals of the record, oldest first, each with
-            `status` and `input_sha256`.
+            `status`, `input_sha256` and `locations`.
 
     Returns:
-        The newest non-stale accepted proposal, else the newest non-stale proposed one,
-        or None for a record without one or that is no measure of its own.
+        The newest non-stale accepted proposal, else the newest non-stale proposed one
+        that only fills empty location columns (auto-acceptance), else None; and every
+        non-stale proposed one that would replace a stage-1 location. Both are empty for
+        a record that is no measure of its own.
     """
     if out["inferred_record_type"] != "measure" or "refers_to_other_measure" in flags:
-        return None
+        return None, []
     digest = input_sha256(record)
     fresh = [proposal for proposal in proposals if proposal["input_sha256"] == digest]
-    accepted = [proposal for proposal in fresh if proposal["status"] == "accepted"]
-    return (accepted or fresh or [None])[-1]
-
-
-def replaces_stage1_location(out: dict[str, str], proposal: dict) -> bool:
-    """Tell whether a proposal would replace a stage-1 location value."""
-    return any(out[ROLE_COLUMNS[location["role"]]] for location in proposal["locations"])
+    # A proposal that only repeats stage 1 changes nothing, so it never shadows another.
+    changing = [proposal for proposal in fresh if proposed_columns(out, proposal)]
+    accepted = [proposal for proposal in changing if proposal["status"] == "accepted"]
+    pending = [proposal for proposal in changing if proposal["status"] == "proposed"]
+    conflicts = [proposal for proposal in pending if replaces_stage1_location(out, proposal)]
+    fills = [proposal for proposal in pending if proposal not in conflicts]
+    return (accepted or fills or [None])[-1], conflicts
 
 
 def apply_proposal(
     record: dict[str, str], out: dict[str, str], flags: set[str], proposals: list[dict]
 ) -> set[str]:
-    """Fill location columns of a measure from the proposal picked by `pick_proposal`.
+    """Fill location columns of a measure from the proposal picked by `pick_proposals`.
 
     An accepted proposal replaces the stage-1 values of the columns it names. A proposed
     (not reviewed) one applies only if every location it proposes fills an empty stage-1
-    column; otherwise it is flagged as a conflict and not applied.
+    column; one that would replace a stage-1 location flags the record as a conflict and
+    is not applied, without blocking a gap-filling proposal of the same record.
 
     Args:
         record: Record with stable field keys.
@@ -185,28 +230,26 @@ def apply_proposal(
             `status`, `input_sha256` and `locations` (`role`, `name`, `kind`).
 
     Returns:
-        The record's flags, with `location_source:reviewed_proposal` or
-        `location_source:llm_proposal` if the proposal applied, or
-        `llm_proposal_conflict` if it conflicts.
+        The record's flags, with `location_source:llm_proposal` if a proposal applied
+        (plus `llm_proposal_reviewed` if a human accepted it), and
+        `llm_proposal_conflict` if one conflicts.
     """
-    proposal = pick_proposal(record, out, flags, proposals)
-    if proposal is None:
+    proposal, conflicts = pick_proposals(record, out, flags, proposals)
+    if conflicts:
+        flags = flags | {CONFLICT_FLAG}
+    columns = proposed_columns(out, proposal) if proposal else {}
+    if not columns:
         return flags
     accepted = proposal["status"] == "accepted"
-    columns: dict[str, list[dict]] = {}
-    for location in proposal["locations"]:
-        columns.setdefault(ROLE_COLUMNS[location["role"]], []).append(location)
-    if replaces_stage1_location(out, proposal):
-        if not accepted:
-            return flags | {CONFLICT_FLAG}
-        if not any(out[column] for column in set(ROLE_COLUMNS.values()) - columns.keys()):
+    if accepted and replaces_stage1_location(out, proposal):
+        if not any(out[column] for column in set(STAGE1_LOCATIONS.values()) - columns.keys()):
             # Every stage-1 location is overruled, so its derivation flags no longer hold.
             flags = {flag for flag in flags if not flag.startswith(STAGE1_LOCATION_FLAGS)}
     for column, locations in columns.items():
         out[column] = LIST_SEPARATOR.join(location["name"] for location in locations)
         if column in KIND_COLUMNS:
             out[KIND_COLUMNS[column]] = locations[0]["kind"]
-    flags = flags | {REVIEWED_PROPOSAL_FLAG if accepted else LLM_PROPOSAL_FLAG}
+    flags = flags | {LLM_PROPOSAL_FLAG} | ({REVIEWED_PROPOSAL_FLAG} if accepted else set())
     if out["inferred_location_start"]:
         flags.discard("location_missing")
     if out["inferred_location_end"]:
@@ -217,28 +260,31 @@ def apply_proposal(
 
 
 def audit_sample(entries: list[tuple[str, str, dict]]) -> list[dict]:
-    """Draw the audit sample: about 5 % of the entries per DSO, at least 3.
+    """Draw the audit sample, stratified by DSO and location kind, with a fixed seed.
 
-    Within a DSO the entries are shuffled with a seed fixed per DSO, ordered by kind and
-    picked at even steps, so each kind is represented in proportion and the same entries
-    always give the same sample.
+    Each DSO gets about 5 % of its entries, at least 3 (or all if it has fewer), split
+    over its kinds in proportion by the largest-remainder method. Each stratum is drawn
+    with a seed fixed per DSO, so the same entries always give the same sample.
 
     Args:
         entries: DSO slug, location kind and review row of each auto-accepted proposal.
 
     Returns:
-        The sampled review rows, by DSO.
+        The sampled review rows, by DSO and kind.
     """
-    by_dso: dict[str, list[tuple[str, dict]]] = {}
+    strata: dict[str, dict[str, list[dict]]] = {}
     for dso, kind, row in sorted(entries, key=lambda entry: entry[2]["proposal_id"]):
-        by_dso.setdefault(dso, []).append((kind, row))
+        strata.setdefault(dso, {}).setdefault(kind, []).append(row)
     sample = []
-    for dso, items in sorted(by_dso.items()):
+    for dso, kinds in sorted(strata.items()):
+        total = sum(len(rows) for rows in kinds.values())
+        count = min(total, max(3, math.ceil(total * 0.05)))
+        quotas = {kind: count * len(rows) / total for kind, rows in kinds.items()}
+        shares = {kind: int(quota) for kind, quota in quotas.items()}
+        by_remainder = sorted(quotas, key=lambda kind: (shares[kind] - quotas[kind], kind))
+        for kind in by_remainder[: count - sum(shares.values())]:
+            shares[kind] += 1
         rng = random.Random(dso)
-        rng.shuffle(items)
-        items.sort(key=lambda item: item[0])
-        count = min(len(items), max(3, math.ceil(len(items) * 0.05)))
-        step = len(items) / count
-        offset = rng.random() * step
-        sample += [items[int(offset + index * step)][1] for index in range(count)]
+        for kind, rows in sorted(kinds.items()):
+            sample += rng.sample(rows, shares[kind])
     return sample

@@ -1,7 +1,7 @@
 ---
 name: nap-locate-measures
 description: Location proposals for nap-tool records that stage 1 could not locate, via gazetteer lookup and `nap-tool propose add`. Use when asked to locate measures of a set and scheme.
-version: "0.1"
+version: "0.2"
 ---
 
 # Locate measures
@@ -24,13 +24,13 @@ Keep a **skip list**: row ids you will not propose for, each with its reason. `p
 
 Repeat per chunk:
 
-1. **Fetch**: `nap-tool propose rows --set-id S --scheme-id C [--dso D] --limit N`, with N = 20 plus the length of the skip list. Drop skip-list rows from the output.
+1. **Fetch**: `nap-tool propose rows --set-id S --scheme-id C [--dso D] --limit N`, with N = 20 plus the length of the skip list. Drop skip-list records from the output.
 2. **Read** each package: `measure_name`, `measure_description` and `upstream_grid_node` are the source text; `location_start`, `location_end` and `location_via` are what stage 1 already found; `asset_class` and `grid_level` are stage 1's reading. Collect the location names the text names.
 3. **Match**: one `gazetteer match --dso <dso_mastr_nr> --level <level> NAME [NAME …]` per record, all its names in one call (records with the same DSO and level may share a call). `<level>` is the first entry of the record's comma-separated `grid_level`. Omit `--level` when `grid_level` is empty or `all`, or when the gazetteer answers that the DSO has no area for that level. If it answers "unknown DSO MaStR number", propose from the text alone, without `candidate`.
-4. **Propose**: write one proposal line per record that has a location to propose (see Rules); every other record goes on the skip list. Pipe the chunk's proposal lines in with a quoted heredoc (`<<'EOF'`) to `nap-tool propose add --set-id S --scheme-id C --model M --skill-version V`.
+4. **Propose**: per record, write a gap-filling line if it has an empty location column to fill and, rarely, a correction line (see Rules); a record with neither goes on the skip list. Send all of a record's lines in the same chunk: `propose rows` skips a record once it has a proposal. Pipe the chunk's proposal lines in with a quoted heredoc (`<<'EOF'`) to `nap-tool propose add --set-id S --scheme-id C --model M --skill-version V`.
 5. **Fix**: `propose add` prints one report per input line, matched by its `line` number (`row_id` is null for a malformed line): `"status": "stored"`, or `"status": "rejected"` with a `reason`. Correct each rejected proposal line and resend it once; still rejected → skip list.
 
-A chunk is done when every package in it is `stored` or on the skip list. The run is done when a fetch returns only skip-list rows or the chunk count is reached; then write the Summary.
+A chunk is done when every package in it is `stored` or on the skip list. The run is done when a fetch returns only skip-list records or the chunk count is reached; then write the Summary.
 
 ### Proposal line
 
@@ -49,7 +49,8 @@ If `propose add` rejects a line's shape, see "Location proposals" in `apps/docs/
 
 ## Rules
 
-- **Fill gaps only.** Propose a role only when its stage-1 column is empty: `start`/`site`/`area` → `location_start`, `end` → `location_end`, `via` → `location_via`. `classify` drops the whole proposal when any of its locations hits a filled column, so for a power line with a start but no end, propose the end alone. No empty column to fill → skip list. A filled column that looks wrong goes into your Summary.
+- **Fill gaps.** The gap-filling line proposes only roles whose stage-1 column is empty: `start`/`site`/`area` → `location_start`, `end` → `location_end`, `via` → `location_via`. `classify` applies it without review (auto-acceptance). For a power line with a start but no end, propose the end alone.
+- **Correct only clear contradictions.** Propose a role whose stage-1 column is filled only when the source text clearly contradicts that value, e.g. a hyphenated compound split in the wrong place ("Kabel Waldshut-Tiengen" read as start "Waldshut", end "Tiengen"). A correction is a conflict: `classify` flags it `llm_proposal_conflict` and applies it only after a human accepts it. Send it as its own line, never inside the gap-filling line (one filled column makes a whole line a conflict, so its gap fills would wait for review too). The correction line holds the corrected roles plus the record's gap fills, so accepting it keeps them. A name equal to the stage-1 value is no correction; leave it out. A filled column that only might be wrong goes into your Summary, not into a correction.
 - **Candidate spelling.** When a candidate is the same place or station the text names, differing only in spelling (case, ß/ss, umlauts, hyphens, spacing, station prefix), use the candidate's `name` and set `candidate` to its `osm`. Otherwise write the name as the source spells it and leave `candidate` out.
 - **Verbatim quote.** Every location quotes the source span that names it, copied character for character from the field it names; `propose add` rejects a quote it cannot find there.
 - **Qualifiers stay.** Ost, West, Nord, Süd, A/B, "2" and similar are part of the name: "UW Musterstadt Ost" → "Musterstadt Ost". A candidate missing the qualifier is a different station; write the source spelling.
@@ -60,4 +61,4 @@ If `propose add` rejects a line's shape, see "Location proposals" in `apps/docs/
 
 ## Summary
 
-When the run ends, report to the user: chunks done; proposal lines stored and rejected; the skip list with reasons; every rejection reason you could not fix; row ids where stage 1 looks wrong; patterns you noticed in the source text.
+When the run ends, report to the user: chunks done; proposal lines stored and rejected; the skip list with reasons; every rejection reason you could not fix; row ids where stage 1 looks wrong but you sent no correction; patterns you noticed in the source text.

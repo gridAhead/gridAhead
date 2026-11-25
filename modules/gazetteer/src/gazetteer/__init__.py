@@ -127,7 +127,7 @@ def match(entries: list[tuple[dict, set[str]]], query: str, limit: int) -> list[
         limit: Maximum number of candidates.
 
     Returns:
-        Up to `limit` candidates, best first; entries scoring 0 are no match.
+        Up to `limit` candidates, best first; entries scoring 0 are left out.
     """
     query = normalize(query)
     candidates = []

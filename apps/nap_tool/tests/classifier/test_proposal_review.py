@@ -91,7 +91,7 @@ def write_records(repository, dso_counts: dict[str, int]) -> list[str]:
 
 def test_export_samples_auto_accepted_proposals_per_dso_and_kind_reproducibly(repository, root):
     row_ids = write_records(repository, {"a": 100, "b": 10, "c": 2})
-    kinds = ["substation"] * 60 + ["place"] * 40 + ["substation"] * 12
+    kinds = ["substation"] * 60 + ["place"] * 25 + ["local_substation"] * 15 + ["substation"] * 12
     propose(
         *(
             {"row_id": row, "locations": [{**ALBBRUCK, "kind": kind}]}
@@ -101,10 +101,17 @@ def test_export_samples_auto_accepted_proposals_per_dso_and_kind_reproducibly(re
     sample = export(root)
     assert {row["reason"] for row in sample} == {"audit"}
     dso_of = {row: dso for row, dso in zip(row_ids, ["a"] * 100 + ["b"] * 10 + ["c"] * 2)}
-    per_dso = Counter(dso_of[row["row_id"]] for row in sample)
-    assert per_dso == {"a": 5, "b": 3, "c": 2}
-    kinds_a = {row["proposal"] for row in sample if dso_of[row["row_id"]] == "a"}
-    assert kinds_a == {"start: Albbruck (substation)", "start: Albbruck (place)"}
+    strata = Counter(
+        (dso_of[row["row_id"]], row["proposal"].split("(")[1].rstrip(")")) for row in sample
+    )
+    # About 5 % per DSO, at least 3, split over the kinds in proportion (largest remainder).
+    assert strata == {
+        ("a", "substation"): 3,
+        ("a", "place"): 1,
+        ("a", "local_substation"): 1,
+        ("b", "substation"): 3,
+        ("c", "substation"): 2,
+    }
     assert export(root) == sample
 
 
@@ -139,7 +146,7 @@ def test_an_accepted_conflicting_proposal_replaces_the_stage_1_location(root):
         row["inferred_location_end_kind"],
     ) == ("Albbruck", "Laufenburg", "Waldshut-Tiengen", "substation")
     flags = row["inferred_flags"].split(",")
-    assert "location_source:reviewed_proposal" in flags
+    assert {"location_source:llm_proposal", "llm_proposal_reviewed"} <= set(flags)
     assert "llm_proposal_conflict" not in flags
     assert row["inferred_quality_location"] == "high"
 
@@ -212,3 +219,52 @@ def test_an_accepted_proposal_for_some_locations_keeps_the_stage_1_flags_of_the_
         "Waldshut-Tiengen",
     )
     assert "location_source:measure_name" in row["inferred_flags"].split(",")
+
+
+def test_a_conflicting_proposal_does_not_block_a_gap_filling_one_of_the_same_record(
+    repository, root
+):
+    set_source(
+        repository,
+        measure_description="Kabel von Dogern nach Waldshut",
+        **{"Maßnahme": "Neubau 20 kV Kabel Albbruck"},
+    )
+    end = {
+        **END,
+        "name": "Waldshut",
+        "evidence": {"field": "measure_description", "quote": "Waldshut"},
+    }
+    start = {
+        **end,
+        "role": "start",
+        "name": "Dogern",
+        "evidence": {**end["evidence"], "quote": "Dogern"},
+    }
+    propose({"row_id": "1-2", "locations": [end]}, {"row_id": "1-2", "locations": [start, end]})
+    [row] = classified(root)
+    assert (row["inferred_location_start"], row["inferred_location_end"]) == (
+        "Albbruck",
+        "Waldshut",
+    )
+    flags = row["inferred_flags"].split(",")
+    assert {"location_source:llm_proposal", "llm_proposal_conflict"} <= set(flags)
+    rows = export(root)
+    assert [(item["proposal_id"], item["reason"]) for item in rows] == [
+        ("2", "conflict"),
+        ("1", "audit"),
+    ]
+    assert review(root, rows[:1], p2="accept").exit_code == 0
+    [row] = classified(root)
+    assert (row["inferred_location_start"], row["inferred_location_end"]) == ("Dogern", "Waldshut")
+    assert "llm_proposal_conflict" not in row["inferred_flags"].split(",")
+
+
+def test_an_accepted_correction_repeating_stage_1_does_not_block_a_gap_filling_proposal(root):
+    propose({"row_id": "1-2", "locations": [END]})
+    assert review(root, export(root), p1="waldshut").exit_code == 0
+    propose({"row_id": "1-2", "locations": [VIA]})
+    [row] = classified(root)
+    assert (row["inferred_location_end"], row["inferred_location_via"]) == (
+        "Waldshut",
+        "Laufenburg",
+    )

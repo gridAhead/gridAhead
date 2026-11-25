@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from .config import ClassifyConfig
 from .locations import LocationFinder
-from .proposals import LLM_PROPOSAL_FLAG, apply_proposal
+from .proposals import LLM_PROPOSAL_FLAG, REVIEWED_PROPOSAL_FLAG, apply_proposal
 from .rules import (
     DERIVED_FIELDS,
     LIST_SEPARATOR,
@@ -130,7 +130,9 @@ def quality(out: dict[str, str], flags: set[str]) -> None:
         out["inferred_quality_location"] = "not_applicable"
     elif not out["inferred_location_start"]:
         out["inferred_quality_location"] = "none"
-    elif flags & LOCATION_ISSUES:
+    elif flags & LOCATION_ISSUES - (
+        {LLM_PROPOSAL_FLAG} if REVIEWED_PROPOSAL_FLAG in flags else set()
+    ):
         out["inferred_quality_location"] = "medium"
     else:
         out["inferred_quality_location"] = "high"
