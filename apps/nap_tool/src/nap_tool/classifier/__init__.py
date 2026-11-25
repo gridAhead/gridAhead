@@ -154,7 +154,7 @@ def classify(
         config: Classification configuration.
         dso_identifiers: Name, MaStR number and BDEW code per DSO slug.
         field_mapping: Stable field keys mapped to the original CSV headers.
-        proposals: Proposals with status `proposed` by row id, oldest first (see
+        proposals: Proposals with status `proposed` or `accepted` by row id, oldest first (see
             `proposals.apply_proposal`).
 
     Returns:
