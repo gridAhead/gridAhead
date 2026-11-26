@@ -58,6 +58,8 @@ uv run nap-tool download      # fetch the PDFs of registered documents
 uv run nap-tool extract --tool docling
 uv run nap-tool extract --tool llmPDF
 uv run nap-tool ui            # review tables in the browser
+uv run nap-tool propose rows --set-id 1 --scheme-id 7 --limit 20
+uv run nap-tool propose add --set-id 1 --scheme-id 7 --model <model> --skill-version <v> < proposals.jsonl
 ```
 
 ## Folder layout
@@ -91,7 +93,7 @@ src/nap_tool/
       llmpdf_tool.py        # adapter for the published llmPDF package
       llamaparse_tool.py    # adapter for the paid LlamaParse tier; not wired into `extract`
   cleaning.py, harmonize.py # cleaning and harmonization logic used by the UI
-  classifier/               # `classify` subcommand and rules
+  classifier/               # `classify` and `propose` subcommands and rules
   database/                 # schema, repository, `upgrade`, `migrate`
   ui/                       # `ui` subcommand: FastAPI server and review frontend
 ```
@@ -375,16 +377,105 @@ not to the scheme, so schemes can be reused across Sets. The initial Set is only
 default selection. Classification requires the selected Set to contain grid-measure
 tables. Changing a Set’s filters invalidates its generated outputs.
 
+## Location proposals
+
+Claude proposes location names for records that stage 1 could not locate well; code
+decides whether they take effect (ADR-0002, ADR-0008). Proposals live in the tables
+`proposal` and `proposal_location` of `nap_tool.sqlite`, keyed by row id and the hash
+of the record's source text, independent of any set. History is never deleted.
+
+```bash
+uv run nap-tool propose rows --set-id 1 --scheme-id 7 [--dso <MaStR number>] [--limit 20]
+uv run nap-tool propose add --set-id 1 --scheme-id 7 \
+  --model claude-opus-5-5 --skill-version 0.1 < proposals.jsonl
+```
+
+`propose rows` reads the current classification output of the set and scheme (run
+`classify` first) and prints one JSON line per measure that needs location help:
+
+```json
+{"row_id": "1234-56", "dso_mastr_nr": "SNB123456789012", "asset_class": "line",
+  "grid_level": "MV", "measure_name": "Neubau 20 kV Kabel", "measure_description": "",
+  "upstream_grid_node": "UW Albbruck", "location_start": "", "location_start_kind": "",
+  "location_end": "", "location_end_kind": "", "location_via": ""}
+```
+
+- Only measures with location quality `none` or `medium` are printed, in the order of
+  the classification output. Source text comes from the current harmonized table, as
+  in `propose add`.
+- Records with a generic measure name (`locations.generic_names`, such as "NAP
+  Maßnahme") and an empty description are skipped, as are records with a proposal of
+  any status for their current source text (`input_sha256`, see below); a changed
+  source cell prints the record again.
+- `--dso` keeps one DSO's records; `--limit` stops after that many lines.
+
+`propose add` reads one proposal per line on stdin:
+
+```json
+{"row_id": "1234-56", "locations": [{"role": "start", "name": "Albbruck", "kind": "substation",
+  "evidence": {"field": "upstream_grid_node", "quote": "UW Albbruck"}, "candidate": "node/123456"}]}
+```
+
+- `role` is `start`, `end`, `via`, `site` or `area`; `site` and `area` fill the start
+  location. `kind` is `substation`, `switching_station`, `local_substation`,
+  `search_area`, `street_address`, `code` or `place`. `candidate` is optional.
+- The evidence quote must appear in the named field (`measure_name`,
+  `measure_description` or `upstream_grid_node`) after whitespace and case
+  normalization; an unknown `row_id`, a missing quote or a malformed line is rejected.
+- The command stores passing lines as `proposed`, stamped with model, Skill version and
+  time, and prints one JSON line per input line: `stored` with the proposal id, or
+  `rejected` with the reason.
+- The record's `input_sha256` covers only measure name, description and upstream grid
+  node. A changed source cell makes older proposals stale; a changed classifier rule
+  does not.
+
+`classify` takes per record the newest non-stale `accepted` proposal, otherwise the
+newest non-stale `proposed` one that only fills empty location columns
+(auto-acceptance). A location whose name equals the stage-1 value after whitespace and
+case normalization confirms it: it is no conflict and changes nothing.
+
+- An applied proposal is flagged `location_source:llm_proposal`. An auto-accepted one
+  caps location quality at `medium`; an accepted one replaces the stage-1 values of the
+  location columns it names, is also flagged `llm_proposal_reviewed` and is not capped.
+- A `proposed` one that would replace a stage-1 location with a different name flags
+  the record `llm_proposal_conflict` and is not applied until accepted. It does not
+  block a gap-filling proposal of the same record.
+- Rejected and stale proposals are ignored, source columns never change, and without
+  proposals the output is the same as stage 1 alone.
+
+A human reviews proposals through a CSV round trip, then runs `classify` again:
+
+```bash
+uv run nap-tool propose review export review.csv --set-id 1 --scheme-id 7
+uv run nap-tool propose review import review.csv
+```
+
+- `export` writes every conflicting proposal (`reason` `conflict`) and an audit sample
+  of auto-accepted ones (`audit`): about 5 % per DSO, at least 3, split over location
+  kinds in proportion (stratified by DSO and kind), with a seed fixed per DSO, so the
+  same proposals give the same sample. Columns:
+  `proposal_id`, `row_id`, `reason`, the three source fields, `stage1_location`,
+  `proposal`, `candidate` and an empty `decision`.
+  Conflicts are judged against stage 1 with the default rules; after `classify
+  --config-path`, pass the same `--config-path` to `export`.
+- In `decision`, write `accept`, `reject` or the corrected name; for a proposal with
+  several locations, the corrected names in the order of `proposal`, separated by `;`.
+  A blank decision leaves the proposal unreviewed.
+- `import` sets the status and `reviewed_at`. A correction rejects the proposal and
+  stores a copy with the corrected names as an accepted proposal with `model = human`.
+  An unknown or already reviewed proposal id or an invalid decision fails the import
+  with the line number, and nothing is stored.
+
 ## Data version
 
 `nap_tool.sqlite` carries the nap_data format version in `PRAGMA user_version`;
-this nap_tool expects `DB_VERSION = 21` (`src/nap_tool/database/schema.py`). Every
+this nap_tool expects `DB_VERSION = 22` (`src/nap_tool/database/schema.py`). Every
 database open refuses another version and says whether to update nap_tool or
 nap_data, and `nap-tool ui` prints the version on startup. `connect()` creates the
 schema in an empty file and never upgrades. If nap_data is older than this
 nap_tool, `uv run nap-tool upgrade` applies the steps in
-`src/nap_tool/database/upgrade.py` (the first starts at DB_VERSION 20); then commit
-and push nap_data so others pick up the new version.
+`src/nap_tool/database/upgrade.py` (the first starts at DB_VERSION 20; 21 -> 22 adds
+the proposal tables); then commit and push nap_data so others pick up the new version.
 
 Bump `DB_VERSION` when a nap_tool built for the old value would fail on or misread
 data written under the new one, or the reverse: SQL schema, seeded ids such as

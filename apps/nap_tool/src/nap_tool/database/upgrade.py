@@ -19,7 +19,7 @@ import typer
 
 from nap_tool.classifier.service import VERSIONS_DIR, is_generation, publish_pointer
 from nap_tool.data import data_dir
-from nap_tool.database.schema import DB_VERSION, require_version
+from nap_tool.database.schema import DB_VERSION, PROPOSAL_SCHEMA, require_version
 
 
 def upgrade() -> None:
@@ -102,4 +102,14 @@ def _classification_pointers(root: Path) -> dict[str, int]:
     return {"classification_pointers": converted}
 
 
-UPGRADES: dict[int, Callable[[Path], dict[str, int]]] = {20: _classification_pointers}
+def _proposal_tables(root: Path) -> dict[str, int]:
+    """DB_VERSION 21 -> 22: add the location proposal tables (ADR-0008); safe to rerun."""
+    with closing(sqlite3.connect(root / "nap_tool.sqlite")) as connection:
+        connection.executescript(PROPOSAL_SCHEMA)
+    return {"proposal_tables": 2}
+
+
+UPGRADES: dict[int, Callable[[Path], dict[str, int]]] = {
+    20: _classification_pointers,
+    21: _proposal_tables,
+}

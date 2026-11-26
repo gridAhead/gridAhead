@@ -30,6 +30,8 @@ SCHEMA_FINGERPRINTS = {
     20: "39590f199ca6e17b4338a948efeb92aef145d3295e76df7bf53141ca95f30573",
     # 21: classification output pointer files replace symlinks (ADR-0006).
     21: "02968b3fc4d561ca64ceeb34721baccfd12c6b9d63b649c69aee9c8fc4f6d617",
+    # 22: location proposal tables (ADR-0008).
+    22: "92edf6afc5bfc10dd334e209d32af6c08d55b004e0d44c69df39772153db20cc",
 }
 
 NEWER = (DB_VERSION + 1, "update nap_tool")

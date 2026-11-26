@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Read-only metadata access and atomic classified-output publication."""
+"""Metadata access, proposal storage and atomic classified-output publication."""
 
 from __future__ import annotations
 
@@ -18,16 +18,28 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable, Iterator
 
 from filelock import FileLock, Timeout
+from pydantic import ValidationError
 
 from nap_tool.data import checked_file, replace_file, resolve_path
-from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, require_version
+from nap_tool.database.repository import now
+from nap_tool.database.schema import TABLE_TYPE_GRID_MEASURES, connect, require_version
 
 from . import ClassificationResult, classify
 from .config import CONFIG_PATH, load_config
-from .rules import DERIVED_FIELDS
+from .proposals import (
+    SOURCE_FIELDS,
+    STAGE1_LOCATIONS,
+    ProposalLine,
+    audit_sample,
+    input_sha256,
+    pick_proposals,
+    quote_error,
+    row_id,
+)
+from .rules import DERIVED_FIELDS, LIST_SEPARATOR, comparison
 from .validation import markdown_report, with_metric_expectations
 
 GRID_MEASURE_TYPE_PREFIX = "Maßnahmentabelle"
@@ -38,6 +50,16 @@ OUTPUT_FILES = (
     "unmapped_values.csv",
 )
 VERSIONS_DIR = ".versions"  # holds output generations; see ADR-0006
+REVIEW_COLUMNS = [
+    "proposal_id",
+    "row_id",
+    "reason",
+    *SOURCE_FIELDS,
+    "stage1_location",
+    "proposal",
+    "candidate",
+    "decision",
+]
 
 
 def json_bytes(value: object) -> bytes:
@@ -195,6 +217,13 @@ def inputs(
             tables = _pair_tables(connection, root, scheme, pair["set_id"])
         except HTTPException as error:
             raise ValueError(f"Harmonized source unavailable: {error.detail}") from error
+        # Proposals have no set (ADR-0008); keep those of this table's records, so other
+        # sets' proposals keep the output fresh.
+        proposals = load_proposals(connection)
+        if proposals:
+            with path.open(encoding="utf-8-sig", newline="") as source:
+                row_ids = {row_id(record) for record in csv.DictReader(source)}
+            proposals = {key: items for key, items in proposals.items() if key in row_ids}
         current = _pair_manifest(_fields(connection, scheme, tables), tables)
         if current != scheme["source_manifest_hash"]:
             raise ValueError("Harmonized sources changed; regenerate the harmonized table first")
@@ -208,6 +237,8 @@ def inputs(
                 "scheme_updated_at": scheme["updated_at"],
                 "identifiers": identifiers,
                 "config": config.model_dump(),
+                # ponytail: only when present, so outputs from before proposals stay fresh
+                **({"proposals": proposals} if proposals else {}),
             }
         )
     ).hexdigest()
@@ -218,8 +249,37 @@ def inputs(
         fields=fields,
         identifiers=identifiers,
         config=config,
+        proposals=proposals,
         fingerprint=fingerprint,
     )
+
+
+def load_proposals(connection: sqlite3.Connection) -> dict[str, list[dict]]:
+    """Read every proposal with status `proposed` or `accepted` and its locations.
+
+    Args:
+        connection: Open metadata database.
+
+    Returns:
+        Proposals by row id, oldest first, each with `id`, `status`, `input_sha256` and
+        `locations` (`role`, `name`, `kind`, `candidate`) in submission order.
+    """
+    proposals: dict[int, dict] = {}
+    by_row: dict[str, list[dict]] = {}
+    for row in connection.execute(
+        "SELECT p.id, p.row_id, p.status, p.input_sha256, l.role, l.name, l.kind, l.candidate "
+        "FROM proposal p JOIN proposal_location l ON l.proposal_id = p.id "
+        "WHERE p.status IN ('proposed', 'accepted') ORDER BY p.id, l.id"
+    ):
+        if row["id"] not in proposals:
+            proposals[row["id"]] = dict(
+                id=row["id"], status=row["status"], input_sha256=row["input_sha256"], locations=[]
+            )
+            by_row.setdefault(row["row_id"], []).append(proposals[row["id"]])
+        proposals[row["id"]]["locations"].append(
+            dict(role=row["role"], name=row["name"], kind=row["kind"], candidate=row["candidate"])
+        )
+    return by_row
 
 
 def load_rows(state: dict) -> tuple[list[dict[str, str]], list[str], dict[str, str]]:
@@ -270,7 +330,13 @@ def run(
     with acquired:
         state = inputs(root, scheme_id, config_path, set_id=set_id)
         rows, headers, mapping = load_rows(state)
-        result = classify(rows, state["config"], state["identifiers"], field_mapping=mapping)
+        result = classify(
+            rows,
+            state["config"],
+            state["identifiers"],
+            field_mapping=mapping,
+            proposals=state["proposals"],
+        )
         contents = {
             "classified.csv": csv_bytes(result.rows, headers + DERIVED_FIELDS),
             "validation_report.md": markdown_report(result.report).encode(),
@@ -407,3 +473,323 @@ def output_status(
         reason=reason,
         report=report,
     )
+
+
+def source_records(root: Path, scheme_id: int, set_id: int) -> dict[str, dict[str, str]]:
+    """Read the records of a set's harmonized table, keyed by row id.
+
+    Args:
+        root: Data repository root.
+        scheme_id: Harmonization scheme.
+        set_id: Grid-measure set.
+
+    Returns:
+        Records with stable field keys, by row id (`<extract table>-<row number>`).
+
+    Raises:
+        ValueError: If the harmonized table is missing, stale or malformed.
+    """
+    state = inputs(root, scheme_id, set_id=set_id)
+    rows, _, mapping = load_rows(state)
+    return {row_id(record): record for record in with_field_keys(rows, mapping)}
+
+
+def with_field_keys(rows: list[dict[str, str]], mapping: dict[str, str]) -> list[dict[str, str]]:
+    """Add the stable field keys to rows read with their original CSV headers.
+
+    Args:
+        rows: Rows by original header.
+        mapping: Stable field keys mapped to the original CSV headers.
+
+    Returns:
+        Each row with its stable field keys added.
+    """
+    return [
+        {**row, **{key: row.get(header, "") for key, header in mapping.items()}} for row in rows
+    ]
+
+
+def _insert_locations(db: sqlite3.Connection, proposal_id: int, locations: Iterable[tuple]) -> None:
+    """Store a proposal's locations as (role, name, kind, evidence field, quote, candidate)."""
+    db.executemany(
+        "INSERT INTO proposal_location(proposal_id,role,name,kind,evidence_field,"
+        "evidence_quote,candidate) VALUES (?,?,?,?,?,?,?)",
+        [(proposal_id, *location) for location in locations],
+    )
+
+
+def add_proposals(
+    root: Path,
+    records: dict[str, dict[str, str]],
+    lines: Iterable[str],
+    model: str,
+    skill_version: str,
+) -> list[dict]:
+    """Check proposal JSON lines and store each passing one as `proposed` (ADR-0008).
+
+    Args:
+        root: Data repository root.
+        records: Records with stable field keys, by row id.
+        lines: Proposal JSON lines; blank lines are skipped.
+        model: Model that made the proposals.
+        skill_version: Version of the Skill that guided the model.
+
+    Returns:
+        One report per non-blank line: its line number, row id and status, with the
+        proposal id if stored or the reason if rejected.
+    """
+    report = []
+    created_at = now()
+    with connect(root / "nap_tool.sqlite") as db:
+        for number, line in enumerate(lines, 1):
+            if not line.strip():
+                continue
+            try:
+                proposal = ProposalLine.model_validate_json(line)
+            except ValidationError as error:
+                first = error.errors()[0]
+                where = ".".join(str(part) for part in first["loc"])
+                reason = f"{where}: {first['msg']}" if where else first["msg"]
+                report.append(dict(line=number, row_id=None, status="rejected", reason=reason))
+                continue
+            record = records.get(proposal.row_id)
+            reason = "unknown row_id" if record is None else quote_error(record, proposal)
+            if reason:
+                report.append(
+                    dict(line=number, row_id=proposal.row_id, status="rejected", reason=reason)
+                )
+                continue
+            proposal_id = db.execute(
+                "INSERT INTO proposal(row_id,input_sha256,model,skill_version,created_at) "
+                "VALUES (?,?,?,?,?)",
+                (proposal.row_id, input_sha256(record), model, skill_version, created_at),
+            ).lastrowid
+            _insert_locations(
+                db,
+                proposal_id,
+                [
+                    (
+                        location.role,
+                        location.name,
+                        location.kind,
+                        location.evidence.field,
+                        location.evidence.quote,
+                        location.candidate,
+                    )
+                    for location in proposal.locations
+                ],
+            )
+            report.append(
+                dict(line=number, row_id=proposal.row_id, status="stored", proposal_id=proposal_id)
+            )
+    return report
+
+
+def review_rows(
+    root: Path, scheme_id: int, set_id: int, config_path: Path = CONFIG_PATH
+) -> list[dict[str, str]]:
+    """Collect the unreviewed proposals of a set's records that a human should check.
+
+    Args:
+        root: Data repository root.
+        scheme_id: Harmonization scheme.
+        set_id: Grid-measure set.
+        config_path: Classification YAML, as given to `classify`.
+
+    Returns:
+        Review CSV rows (REVIEW_COLUMNS): every conflicting proposal `classify` would
+        consider, then the audit sample of auto-accepted ones.
+
+    Raises:
+        ValueError: If the harmonized table is missing, stale or malformed.
+    """
+    state = inputs(root, scheme_id, config_path, set_id=set_id)
+    rows, _, mapping = load_rows(state)
+    # Stage 1 alone, so proposals are judged against the rule results.
+    result = classify(rows, state["config"], state["identifiers"], field_mapping=mapping)
+    review, auto = [], []
+    for out, record in zip(result.rows, with_field_keys(result.rows, mapping)):
+        flags = set(out["inferred_flags"].split(LIST_SEPARATOR))
+        proposals = state["proposals"].get(out["row_id"], [])
+        proposal, conflicts = pick_proposals(record, out, flags, proposals)
+        review += [_review_row(record, conflict, "conflict") for conflict in conflicts]
+        if proposal is not None and proposal["status"] == "proposed":
+            kind = proposal["locations"][0]["kind"]
+            auto.append((record.get("dso_slug", ""), kind, _review_row(record, proposal, "audit")))
+    return review + audit_sample(auto)
+
+
+def _review_row(record: dict[str, str], proposal: dict, reason: str) -> dict:
+    """Return the review CSV row (REVIEW_COLUMNS) of a proposal for a classified record."""
+    locations = proposal["locations"]
+    return dict(
+        proposal_id=proposal["id"],
+        row_id=record["row_id"],
+        reason=reason,
+        **{field: record.get(field, "") for field in SOURCE_FIELDS},
+        stage1_location="; ".join(
+            f"{label}: {record[column]}"
+            for label, column in STAGE1_LOCATIONS.items()
+            if record[column]
+        ),
+        proposal="; ".join(
+            f"{location['role']}: {location['name']} ({location['kind']})" for location in locations
+        ),
+        candidate="; ".join(location["candidate"] or "" for location in locations),
+        decision="",
+    )
+
+
+def import_review(root: Path, rows: Iterable[dict[str, str]]) -> dict[str, int]:
+    """Store the decisions of a review CSV; any invalid row stores nothing (ADR-0008).
+
+    A decision is `accept`, `reject` or a corrected name (names separated by `;` in
+    location order for a proposal with several locations). A correction rejects the
+    proposal and stores an accepted copy with the corrected names and `model = human`.
+    Blank decisions are skipped.
+
+    Args:
+        root: Data repository root.
+        rows: Review CSV rows with `proposal_id` and `decision`.
+
+    Returns:
+        The number of accepted, rejected and corrected proposals.
+
+    Raises:
+        ValueError: For a missing column, an unknown or already reviewed proposal id or an
+            invalid decision.
+    """
+    counts = dict(accepted=0, rejected=0, corrected=0)
+    reviewed_at = now()
+    with connect(root / "nap_tool.sqlite") as db:
+        for line, row in enumerate(rows, 2):
+            if not {"proposal_id", "decision"} <= row.keys():
+                raise ValueError("The CSV needs the columns proposal_id and decision")
+            decision = (row["decision"] or "").strip()
+            if not decision:
+                continue
+            proposal_id = (row["proposal_id"] or "").strip()
+            proposal = db.execute("SELECT * FROM proposal WHERE id=?", (proposal_id,)).fetchone()
+            if proposal is None:
+                raise ValueError(f"Line {line}: unknown proposal id {proposal_id!r}")
+            if proposal["status"] != "proposed":
+                raise ValueError(f"Line {line}: proposal {proposal_id} is already reviewed")
+            status = {"accept": "accepted", "reject": "rejected"}.get(decision.casefold())
+            locations = db.execute(
+                "SELECT * FROM proposal_location WHERE proposal_id=? ORDER BY id",
+                (proposal["id"],),
+            ).fetchall()
+            names = [name.strip() for name in decision.split(";")]
+            if not status and (len(names) != len(locations) or not all(names)):
+                raise ValueError(
+                    f"Line {line}: invalid decision {decision!r}; use accept, reject or "
+                    f"{len(locations)} corrected name(s) separated by ';'"
+                )
+            db.execute(
+                "UPDATE proposal SET status=?, reviewed_at=? WHERE id=?",
+                (status or "rejected", reviewed_at, proposal["id"]),
+            )
+            if status:
+                counts[status] += 1
+                continue
+            corrected = db.execute(
+                "INSERT INTO proposal(row_id,input_sha256,model,created_at,status,reviewed_at) "
+                "VALUES (?,?,'human',?,'accepted',?)",
+                (proposal["row_id"], proposal["input_sha256"], reviewed_at, reviewed_at),
+            ).lastrowid
+            _insert_locations(
+                db,
+                corrected,
+                [
+                    (
+                        location["role"],
+                        name,
+                        location["kind"],
+                        location["evidence_field"],
+                        location["evidence_quote"],
+                        # The candidate backed the original spelling only.
+                        location["candidate"] if name == location["name"] else None,
+                    )
+                    for location, name in zip(locations, names)
+                ],
+            )
+            counts["corrected"] += 1
+    return counts
+
+
+def proposal_rows(
+    root: Path,
+    scheme_id: int,
+    set_id: int,
+    *,
+    dso: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, str]]:
+    """Select the measures of the current classification that need location help.
+
+    Selects measures with location quality none or medium, skipping generic-name records
+    with an empty description and records with a proposal of any status for their
+    current `input_sha256`. Source text and hash come from the harmonized table, as in
+    `propose add`, so an output made stale by new proposals still selects correctly.
+
+    Args:
+        root: Data repository root.
+        scheme_id: Harmonization scheme.
+        set_id: Grid-measure set.
+        dso: Only records of this DSO MaStR number.
+        limit: At most this many records, in classification output order.
+
+    Returns:
+        One reading package per selected measure.
+
+    Raises:
+        ValueError: If the set and scheme have no classification output.
+    """
+    if not _pointer(root / "classified" / f"set_{set_id}", scheme_id).is_file():
+        raise ValueError(
+            f"No classification output for set {set_id} and scheme {scheme_id}; run classify first"
+        )
+    state = inputs(root, scheme_id, set_id=set_id)
+    rows, _, mapping = load_rows(state)
+    records = {row_id(record): record for record in with_field_keys(rows, mapping)}
+    directory, _ = saved_output(root, scheme_id, set_id=set_id)
+    with (directory / "classified.csv").open(encoding="utf-8", newline="") as stream:
+        classified = list(csv.DictReader(stream))
+    with database(root) as connection:
+        proposed = {
+            tuple(row) for row in connection.execute("SELECT row_id, input_sha256 FROM proposal")
+        }
+    generic = {comparison(name) for name in state["config"].locations["generic_names"]}
+    packages = []
+    for row in classified:
+        # ponytail: a record gone from the harmonized table waits for the next classify
+        record = records.get(row["row_id"])
+        if (
+            record is None
+            or (dso is not None and row["dso_mastr_nr"] != dso)
+            or row["inferred_record_type"] != "measure"
+            or row["inferred_quality_location"] not in ("none", "medium")
+            or (
+                comparison(record.get("measure_name", "")) in generic
+                and not record.get("measure_description", "").strip()
+            )
+            or (row["row_id"], input_sha256(record)) in proposed
+        ):
+            continue
+        packages.append(
+            {
+                "row_id": row["row_id"],
+                "dso_mastr_nr": row["dso_mastr_nr"],
+                "asset_class": row["inferred_asset_class"],
+                "grid_level": row["inferred_grid_level"],
+                **{field: record.get(field, "") for field in SOURCE_FIELDS},
+                "location_start": row["inferred_location_start"],
+                "location_start_kind": row["inferred_location_start_kind"],
+                "location_end": row["inferred_location_end"],
+                "location_end_kind": row["inferred_location_end_kind"],
+                "location_via": row["inferred_location_via"],
+            }
+        )
+        if len(packages) == limit:
+            break
+    return packages

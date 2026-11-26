@@ -94,6 +94,12 @@ path = "apps/docs/public/logos/veolia-stiftung.png"
 SPDX-FileCopyrightText = "Veolia Stiftung"
 SPDX-License-Identifier = "LicenseRef-AllRightsReserved"
 
+# Claude Code skills: frontmatter must open the file, so no inline header.
+[[annotations]]
+path = ".claude/skills/**"
+SPDX-FileCopyrightText = "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut"
+SPDX-License-Identifier = "Apache-2.0"
+
 # --- apps/nap_tool ------------------------------------------------------------
 # Files that cannot carry an inline header (no comment syntax, generated, or vendored).
 
@@ -140,6 +146,13 @@ SPDX-FileCopyrightText = [
     "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut",
     "2026 Chenyan Ye <https://github.com/yechenyan> © Reiner Lemoine Institut",
 ]
+SPDX-License-Identifier = "Apache-2.0"
+
+# --- modules ------------------------------------------------------------------
+
+[[annotations]]
+path = "modules/*/uv.lock"
+SPDX-FileCopyrightText = "2026 Hendrik Huyskens <https://github.com/henhuy> © Reiner Lemoine Institut"
 SPDX-License-Identifier = "Apache-2.0"
 
 # Vendored / bundled PDF.js (Mozilla). Listed last so it overrides static/** above.

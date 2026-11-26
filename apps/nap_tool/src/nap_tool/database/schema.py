@@ -20,7 +20,7 @@ from typing import Iterator
 # formats the code parses. New documents, tables, reviews and outputs never bump
 # it. connect() never upgrades a database; `nap-tool upgrade` (database/upgrade.py)
 # applies a step's changes and then sets the new user_version.
-DB_VERSION = 21
+DB_VERSION = 22
 TABLE_TYPE_GRID_MEASURES = 1
 TABLE_TYPE_REGIONAL_SCENARIO_PARAMETERS = 2
 TYPE_SCHEMA = """
@@ -67,6 +67,24 @@ CREATE TABLE IF NOT EXISTS harmonize_scheme (
     table_settings TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(table_settings)),
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+"""
+# Location proposals for records, independent of any set (ADR-0008); history is never deleted.
+PROPOSAL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS proposal (
+    id INTEGER PRIMARY KEY, row_id TEXT NOT NULL, input_sha256 TEXT NOT NULL,
+    -- skill_version stays NULL for a human correction (model = 'human').
+    model TEXT NOT NULL, skill_version TEXT, created_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposed'
+        CHECK (status IN ('proposed', 'accepted', 'rejected')),
+    reviewed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS proposal_row ON proposal(row_id, input_sha256);
+CREATE TABLE IF NOT EXISTS proposal_location (
+    id INTEGER PRIMARY KEY, proposal_id INTEGER NOT NULL REFERENCES proposal(id),
+    role TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL,
+    evidence_field TEXT NOT NULL, evidence_quote TEXT NOT NULL, candidate TEXT
+);
+CREATE INDEX IF NOT EXISTS proposal_location_proposal ON proposal_location(proposal_id);
 """
 SCHEMA = (
     TYPE_SCHEMA
@@ -157,6 +175,7 @@ CREATE INDEX IF NOT EXISTS harmonize_source_clean ON harmonize_field_source(clea
     + HARMONIZE_SCHEMA
     + SET_SCHEMA
     + SET_OUTPUT_SCHEMA
+    + PROPOSAL_SCHEMA
     + f"PRAGMA user_version = {DB_VERSION};"
 )
 
